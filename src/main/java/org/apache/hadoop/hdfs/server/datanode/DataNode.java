@@ -208,7 +208,8 @@ import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.protobuf.BlockingService;
 
-/**********************************************************
+/*********************************************************
+ * *
  * DataNode is a class (and program) that stores a set of
  * blocks for a DFS deployment.  A single deployment can
  * have one or many DataNodes.  Each DataNode communicates
