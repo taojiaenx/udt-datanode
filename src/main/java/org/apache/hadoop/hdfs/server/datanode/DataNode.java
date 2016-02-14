@@ -900,7 +900,9 @@ public class DataNode extends ReconfigurableBase
     LOG.info("Opened streaming server at " + streamingAddr);
     this.threadGroup = new ThreadGroup("dataXceiverServer");
     xserver = new DataXceiverServer(tcpPeerServer, conf, this);
+    this.udtxserver = new UDTDataXceiverServer(tcpPeerServer, conf, this);
     this.dataXceiverServer = new Daemon(threadGroup, xserver);
+    this.udtDataXceiverServer = new Daemon(threadGroup, udtxserver);
     this.threadGroup.setDaemon(true); // auto destroy when empty
 
     if (conf.getBoolean(DFSConfigKeys.DFS_CLIENT_READ_SHORTCIRCUIT_KEY,
@@ -1654,6 +1656,7 @@ public class DataNode extends ReconfigurableBase
     // for block writes are not closed until the clients are notified.
     if (dataXceiverServer != null) {
       try {
+    	udtxserver.sendOOBToPeers();
         xserver.sendOOBToPeers();
         ((DataXceiverServer) this.dataXceiverServer.getRunnable()).kill();
         this.dataXceiverServer.interrupt();
