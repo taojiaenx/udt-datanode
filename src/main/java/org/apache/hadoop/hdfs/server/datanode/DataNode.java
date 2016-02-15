@@ -2209,10 +2209,13 @@ public class DataNode extends ReconfigurableBase
    *  If this thread is specifically interrupted, it will stop waiting.
    */
   public void runDatanodeDaemon() throws IOException {
+	  LOG.info("启动小小的数据节点");
+	 
     blockPoolManager.startAll();
 
     // start dataXceiveServer
     dataXceiverServer.start();
+    udtDataXceiverServer.start();
     if (localDataXceiverServer != null) {
       localDataXceiverServer.start();
     }

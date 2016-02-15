@@ -43,6 +43,7 @@ import org.mockito.Mockito;
  * Before each test, mock refresh handlers are created and registered.
  * After each test, the mock handlers are unregistered.
  * After all tests, the cluster is spun down.
+ * 
  */
 public class TestGenericRefresh {
   private static MiniDFSCluster cluster;

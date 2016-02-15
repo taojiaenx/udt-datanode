@@ -4,14 +4,20 @@ import io.netty.bootstrap.ServerBootstrap;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
+import io.netty.channel.ChannelInitializer;
 import io.netty.channel.EventLoopGroup;
+import io.netty.channel.nio.NioEventLoopGroup;
+import io.netty.channel.udt.nio.NioUdtByteConnectorChannel;
 import io.netty.channel.udt.nio.NioUdtProvider;
+import io.netty.handler.logging.LogLevel;
+import io.netty.handler.logging.LoggingHandler;
 import io.netty.util.ReferenceCountUtil;
 
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.logging.Logger;
 
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hdfs.net.PeerServer;
 
@@ -21,6 +27,7 @@ import org.apache.hadoop.hdfs.net.PeerServer;
  *
  */
 class UDTDataXceiverServer extends DataXceiverServer{
+	public static final Log log = LogFactory.getLog(UDTDataXceiverServer.class);
     final ThreadFactory acceptFactory = new UtilThreadFactory("accept");
     final ThreadFactory connectFactory = new UtilThreadFactory("connect");
 	ServerBootstrap serverBootstarp = null;
@@ -30,10 +37,32 @@ class UDTDataXceiverServer extends DataXceiverServer{
 	UDTDataXceiverServer(PeerServer peerServer, Configuration conf,
 			DataNode datanode) {
 		super(peerServer, conf, datanode);
+		log.info("udt服务器构造成功");
 	}
 	@Override
 	  public void run() {
-		
+		log.info("开始工作");
+    	this.bossGroup = new NioEventLoopGroup(1,acceptFactory, NioUdtProvider.BYTE_PROVIDER);
+    	this.workerGroup = new NioEventLoopGroup(3, connectFactory, NioUdtProvider.BYTE_PROVIDER);
+    	serverBootstarp = new ServerBootstrap()
+		.group(bossGroup, workerGroup).channelFactory(NioUdtProvider.BYTE_ACCEPTOR).childHandler(new ChannelInitializer<NioUdtByteConnectorChannel>(){
+
+			@Override
+			protected void initChannel(NioUdtByteConnectorChannel ch)
+					throws Exception {
+				ch.pipeline().addLast(
+                        new LoggingHandler(LogLevel.INFO),
+                        new ModemServerHandler());
+			}
+			
+		});
+
+         try {
+			serverBootstarp.bind(1013).sync();
+		} catch (InterruptedException e) {
+			log.error("绑定出错", e);
+		}
+         log.info("绑定成功");
 	}
 
 
@@ -55,7 +84,7 @@ class UtilThreadFactory implements ThreadFactory {
 }
 class ModemServerHandler extends ChannelInboundHandlerAdapter {
 
-    private static final Logger log = Logger.getLogger(ModemServerHandler.class.getName());
+    private static final Log log = LogFactory.getLog(ModemServerHandler.class.getName());
     
     @Override
     public void channelActive(final ChannelHandlerContext ctx) throws Exception {
@@ -66,7 +95,7 @@ class ModemServerHandler extends ChannelInboundHandlerAdapter {
     
     @Override
     public void channelRead(final ChannelHandlerContext ctx, Object msg) {
-    System.out.println("channelRead===================");
+    log.info("channelRead===================");
         ByteBuf buf = (ByteBuf) msg;
         try {
         StringBuilder sb=new StringBuilder();
@@ -74,7 +103,7 @@ class ModemServerHandler extends ChannelInboundHandlerAdapter {
                 byte b = buf.getByte(i);
                 sb.append((char) b);
             }
-            System.out.println(sb.toString());
+            log.info(sb.toString());
             
         } catch(Exception e){
         e.printStackTrace();
@@ -93,7 +122,7 @@ class ModemServerHandler extends ChannelInboundHandlerAdapter {
     @Override
     public void exceptionCaught(final ChannelHandlerContext ctx,
             final Throwable cause) {
-        log.log(Level.WARNING, "close the connection when an exception is raised", cause);
+        log.warn("close the connection when an exception is raised", cause);
         ctx.close();
     }
 
