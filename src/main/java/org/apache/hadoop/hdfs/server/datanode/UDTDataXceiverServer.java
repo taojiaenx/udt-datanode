@@ -14,12 +14,14 @@ import io.netty.handler.logging.LoggingHandler;
 import io.netty.util.ReferenceCountUtil;
 
 import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hdfs.net.PeerServer;
+import org.apache.hadoop.util.Daemon;
 
 /**
  * 以udt模式启动的数据节点服务器
@@ -28,34 +30,36 @@ import org.apache.hadoop.hdfs.net.PeerServer;
  */
 class UDTDataXceiverServer extends DataXceiverServer{
 	public static final Log log = LogFactory.getLog(UDTDataXceiverServer.class);
-    final ThreadFactory acceptFactory = new UtilThreadFactory("accept");
-    final ThreadFactory connectFactory = new UtilThreadFactory("connect");
-	ServerBootstrap serverBootstarp = null;
-	EventLoopGroup bossGroup = null;
-	EventLoopGroup workerGroup = null;
+	private static final int UDT_MANAGER_COUNT = 8;
+	private static final int UDT_WORKER_COUNT = 128;
+    private final ThreadFactory threadFactory;
+	private final ServerBootstrap serverBootstarp;
+	private final EventLoopGroup bossGroup;
+	private final EventLoopGroup workerGroup;
 
 	UDTDataXceiverServer(PeerServer peerServer, Configuration conf,
-			DataNode datanode) {
+			DataNode datanode, ThreadGroup threadGroup) {
 		super(peerServer, conf, datanode);
 		log.info("udt服务器构造成功");
+		this.threadFactory = new UtilThreadFactory(threadGroup);
+    	this.bossGroup = new NioEventLoopGroup(UDT_MANAGER_COUNT,threadFactory, NioUdtProvider.BYTE_PROVIDER);
+    	this.workerGroup = new NioEventLoopGroup(UDT_WORKER_COUNT, threadFactory, NioUdtProvider.BYTE_PROVIDER);
+    	this.serverBootstarp = new ServerBootstrap()
+    			.group(bossGroup, workerGroup).channelFactory(NioUdtProvider.BYTE_ACCEPTOR).childHandler(new ChannelInitializer<NioUdtByteConnectorChannel>(){
+
+    				@Override
+    				protected void initChannel(NioUdtByteConnectorChannel ch)
+    						throws Exception {
+    					ch.pipeline().addLast(
+    	                        new LoggingHandler(LogLevel.INFO),
+    	                        new ModemServerHandler());
+    				}
+
+    			});
 	}
 	@Override
 	  public void run() {
 		log.info("开始工作");
-    	this.bossGroup = new NioEventLoopGroup(1,acceptFactory, NioUdtProvider.BYTE_PROVIDER);
-    	this.workerGroup = new NioEventLoopGroup(3, connectFactory, NioUdtProvider.BYTE_PROVIDER);
-    	serverBootstarp = new ServerBootstrap()
-		.group(bossGroup, workerGroup).channelFactory(NioUdtProvider.BYTE_ACCEPTOR).childHandler(new ChannelInitializer<NioUdtByteConnectorChannel>(){
-
-			@Override
-			protected void initChannel(NioUdtByteConnectorChannel ch)
-					throws Exception {
-				ch.pipeline().addLast(
-                        new LoggingHandler(LogLevel.INFO),
-                        new ModemServerHandler());
-			}
-			
-		});
 
          try {
 			serverBootstarp.bind(1013).sync();
@@ -65,34 +69,40 @@ class UDTDataXceiverServer extends DataXceiverServer{
          log.info("绑定成功");
 	}
 
+	/**
+	 * 关闭服务
+	 */
+	void shutdownGraceFully() {
+		bossGroup.shutdownGracefully(10000, 60000, TimeUnit.MILLISECONDS);
+	}
+
 
 }
+
 class UtilThreadFactory implements ThreadFactory {
+	private final  ThreadGroup threadGroup;
 
-    private static final AtomicInteger counter = new AtomicInteger();
 
-    private final String name;
-
-    public UtilThreadFactory(final String name) {
-        this.name = name;
+    public UtilThreadFactory(final  ThreadGroup threadGroup) {
+        this.threadGroup = threadGroup;
     }
 
     @Override
     public Thread newThread(final Runnable runnable) {
-        return new Thread(runnable, name + '-' + counter.getAndIncrement());
+        return new Daemon(threadGroup, runnable);
     }
 }
 class ModemServerHandler extends ChannelInboundHandlerAdapter {
 
     private static final Log log = LogFactory.getLog(ModemServerHandler.class.getName());
-    
+
     @Override
     public void channelActive(final ChannelHandlerContext ctx) throws Exception {
     log.info("server active");
     System.out.println("channelActive===================");
         log.info("ECHO active " + NioUdtProvider.socketUDT(ctx.channel()).toStringOptions());
     }
-    
+
     @Override
     public void channelRead(final ChannelHandlerContext ctx, Object msg) {
     log.info("channelRead===================");
@@ -104,7 +114,7 @@ class ModemServerHandler extends ChannelInboundHandlerAdapter {
                 sb.append((char) b);
             }
             log.info(sb.toString());
-            
+
         } catch(Exception e){
         e.printStackTrace();
         }
