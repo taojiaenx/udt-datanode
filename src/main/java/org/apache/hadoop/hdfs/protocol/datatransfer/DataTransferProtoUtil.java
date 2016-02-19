@@ -49,7 +49,7 @@ import org.apache.htrace.TraceScope;
 @InterfaceAudience.Private
 @InterfaceStability.Evolving
 public abstract class DataTransferProtoUtil {
-  static BlockConstructionStage fromProto(
+  public static BlockConstructionStage fromProto(
       OpWriteBlockProto.BlockConstructionStage stage) {
     return BlockConstructionStage.valueOf(stage.name());
   }

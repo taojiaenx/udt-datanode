@@ -1,5 +1,9 @@
 package org.apache.hadoop.hdfs.server.datanode;
 
+import static org.apache.hadoop.hdfs.protocol.datatransfer.DataTransferProtoUtil.continueTraceSpan;
+import static org.apache.hadoop.hdfs.protocol.datatransfer.DataTransferProtoUtil.fromProto;
+import static org.apache.hadoop.hdfs.protocolPB.PBHelper.vintPrefixed;
+
 import java.io.EOFException;
 import java.io.IOException;
 import java.net.SocketTimeoutException;
@@ -8,24 +12,33 @@ import java.util.List;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.apache.hadoop.fs.StorageType;
+import org.apache.hadoop.hdfs.protocol.DatanodeInfo;
+import org.apache.hadoop.hdfs.protocol.ExtendedBlock;
+import org.apache.hadoop.hdfs.protocol.datatransfer.BlockConstructionStage;
 import org.apache.hadoop.hdfs.protocol.datatransfer.DataTransferProtocol;
 import org.apache.hadoop.hdfs.protocol.datatransfer.Op;
+import org.apache.hadoop.hdfs.protocol.proto.DataTransferProtos.CachingStrategyProto;
 import org.apache.hadoop.hdfs.protocol.proto.DataTransferProtos.OpWriteBlockProto;
+import org.apache.hadoop.hdfs.protocolPB.PBHelper;
+import org.apache.hadoop.hdfs.security.token.block.BlockTokenIdentifier;
 import org.apache.hadoop.hdfs.server.datanode.udt.codec.ProtobufDecoder;
-
+import org.apache.hadoop.security.token.Token;
+import org.apache.hadoop.util.DataChecksum;
+import org.apache.htrace.TraceScope;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.ReplayingDecoder;
-import org.apache.hadoop.hdfs.server.datanode.UdtDNObjectDecoder.State;
+import org.apache.hadoop.hdfs.server.datanode.DNObjectDecoder.State;
 
 /**
  * 用于异步非阻塞的datanode交互协议实现
  * @author taojiaen
  *
  */
-public abstract class UdtDNObjectDecoder extends ReplayingDecoder<State>{
-	public static final Log LOG = DataNode.LOG;
+public abstract class DNObjectDecoder extends ReplayingDecoder<State>{
+	protected static final Log LOG = DataNode.LOG;
 
 	protected final DataNode datanode;
 	/**
@@ -34,7 +47,7 @@ public abstract class UdtDNObjectDecoder extends ReplayingDecoder<State>{
 	private int 	opsProcessed = 0;
 	private final ProtobufDecoder protobufDecoder = new ProtobufDecoder();
 
-	public UdtDNObjectDecoder(DataNode datanode) {
+	public DNObjectDecoder(DataNode datanode) {
 		super(State.INITIAL_TYPE);
 		this.datanode = datanode;
 	}
@@ -137,7 +150,61 @@ public abstract class UdtDNObjectDecoder extends ReplayingDecoder<State>{
 	 * @param in
 	 * @param out
 	 */
-	protected abstract void opWriteBlock(final OpWriteBlockProto proto, final ChannelHandlerContext ctx, final ByteBuf in);
+	protected  void opWriteBlock(final OpWriteBlockProto proto, final ChannelHandlerContext ctx, final ByteBuf in, final List<Object> out) {
+	    final DatanodeInfo[] targets = PBHelper.convert(proto.getTargetsList());
+	    TraceScope traceScope = continueTraceSpan(proto.getHeader(),
+	        proto.getClass().getSimpleName());
+	    try {
+	      writeBlock(PBHelper.convert(proto.getHeader().getBaseHeader().getBlock()),
+	          PBHelper.convertStorageType(proto.getStorageType()),
+	          PBHelper.convert(proto.getHeader().getBaseHeader().getToken()),
+	          proto.getHeader().getClientName(),
+	          targets,
+	          PBHelper.convertStorageTypes(proto.getTargetStorageTypesList(), targets.length),
+	          PBHelper.convert(proto.getSource()),
+	          fromProto(proto.getStage()),
+	          proto.getPipelineSize(),
+	          proto.getMinBytesRcvd(), proto.getMaxBytesRcvd(),
+	          proto.getLatestGenerationStamp(),
+	          fromProto(proto.getRequestedChecksum()),
+	          (proto.hasCachingStrategy() ?
+	              getCachingStrategy(proto.getCachingStrategy()) :
+	            CachingStrategy.newDefaultStrategy()),
+	          (proto.hasAllowLazyPersist() ? proto.getAllowLazyPersist() : false),
+	          (proto.hasPinning() ? proto.getPinning(): false),
+	          (PBHelper.convertBooleanList(proto.getTargetPinningsList())),
+	          proto, ctx, in,out);
+	    } finally {
+	     if (traceScope != null) traceScope.close();
+	    }
+	}
+
+
+	protected abstract void writeBlock(final ExtendedBlock block,
+		      final StorageType storageType,
+		      final Token<BlockTokenIdentifier> blockToken,
+		      final String clientname,
+		      final DatanodeInfo[] targets,
+		      final StorageType[] targetStorageTypes,
+		      final DatanodeInfo srcDataNode,
+		      final BlockConstructionStage stage,
+		      final int pipelineSize,
+		      final long minBytesRcvd,
+		      final long maxBytesRcvd,
+		      final long latestGenerationStamp,
+		      DataChecksum requestedChecksum,
+		      CachingStrategy cachingStrategy,
+		      final boolean allowLazyPersist,
+		      final boolean pinning,
+		      final boolean[] targetPinnings, ChannelHandlerContext ctx, ByteBuf in, List<Object> out) throws IOException;
+
+	static private CachingStrategy getCachingStrategy(CachingStrategyProto strategy) {
+	    Boolean dropBehind = strategy.hasDropBehind() ?
+	        strategy.getDropBehind() : null;
+	    Long readahead = strategy.hasReadahead() ?
+	        strategy.getReadahead() : null;
+	    return new CachingStrategy(dropBehind, readahead);
+	  }
 
 
 
@@ -150,7 +217,7 @@ public abstract class UdtDNObjectDecoder extends ReplayingDecoder<State>{
 	}
 
 	/**
-	 * The internal state of {@link UdtDNObjectDecoder}.
+	 * The internal state of {@link DNObjectDecoder}.
 	 * <em>Internal use only</em>.
 	 */
 	protected static enum State {

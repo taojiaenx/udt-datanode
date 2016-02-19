@@ -21,6 +21,7 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hdfs.net.PeerServer;
+import org.apache.hadoop.hdfs.server.datanode.udt.codec.DNRequestDecoder;
 import org.apache.hadoop.util.Daemon;
 
 /**
@@ -38,7 +39,7 @@ class UDTDataXceiverServer extends DataXceiverServer{
 	private final EventLoopGroup workerGroup;
 
 	UDTDataXceiverServer(PeerServer peerServer, Configuration conf,
-			DataNode datanode, ThreadGroup threadGroup) {
+			final DataNode datanode, ThreadGroup threadGroup) {
 		super(peerServer, conf, datanode);
 		log.info("udt服务器构造成功");
 		this.threadFactory = new UtilThreadFactory(threadGroup);
@@ -52,7 +53,7 @@ class UDTDataXceiverServer extends DataXceiverServer{
     						throws Exception {
     					ch.pipeline().addLast(
     	                        new LoggingHandler(LogLevel.INFO),
-    	                        new ModemServerHandler());
+    	                        new DNRequestDecoder(datanode));
     				}
 
     			});
