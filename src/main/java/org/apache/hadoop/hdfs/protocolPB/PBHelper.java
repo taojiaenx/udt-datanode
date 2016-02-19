@@ -239,13 +239,13 @@ import com.google.protobuf.CodedInputStream;
 /**
  * Utilities for converting protobuf classes to and from implementation classes
  * and other helper utilities to help in dealing with protobuf.
- * 
+ *
  * Note that when converting from an internal type to protobuf type, the
  * converter never return null for protobuf type. The check for internal type
  * being null must be done before calling the convert() method.
  */
 public class PBHelper {
-  private static final RegisterCommandProto REG_CMD_PROTO = 
+  private static final RegisterCommandProto REG_CMD_PROTO =
       RegisterCommandProto.newBuilder().build();
   private static final RegisterCommand REG_CMD = new RegisterCommand();
 
@@ -255,7 +255,7 @@ public class PBHelper {
       AclEntryType.values();
   private static final FsAction[] FSACTION_VALUES =
       FsAction.values();
-  private static final XAttr.NameSpace[] XATTR_NAMESPACE_VALUES = 
+  private static final XAttr.NameSpace[] XATTR_NAMESPACE_VALUES =
       XAttr.NameSpace.values();
 
   private PBHelper() {
@@ -409,7 +409,7 @@ public class PBHelper {
     }
     return result;
   }
-  
+
   public static DatanodeID[] convert(DatanodeIDProto[] did) {
     if (did == null) return null;
     final int len = did.length;
@@ -419,7 +419,7 @@ public class PBHelper {
     }
     return result;
   }
-  
+
   // Block
   public static BlockProto convert(Block b) {
     return BlockProto.newBuilder().setBlockId(b.getBlockId())
@@ -471,7 +471,7 @@ public class PBHelper {
 
   public static BlockKeyProto convert(BlockKey key) {
     byte[] encodedKey = key.getEncodedKey();
-    ByteString keyBytes = ByteString.copyFrom(encodedKey == null ? 
+    ByteString keyBytes = ByteString.copyFrom(encodedKey == null ?
         DFSUtil.EMPTY_BYTES : encodedKey);
     return BlockKeyProto.newBuilder().setKeyId(key.getKeyId())
         .setKeyBytes(keyBytes).setExpiryDate(key.getExpiryDate()).build();
@@ -591,13 +591,13 @@ public class PBHelper {
       return new NamenodeCommand(cmd.getAction());
     }
   }
-  
+
   public static ExtendedBlock convert(ExtendedBlockProto eb) {
     if (eb == null) return null;
     return new ExtendedBlock( eb.getPoolId(),  eb.getBlockId(),   eb.getNumBytes(),
        eb.getGenerationStamp());
   }
-  
+
   public static ExtendedBlockProto convert(final ExtendedBlock b) {
     if (b == null) return null;
    return ExtendedBlockProto.newBuilder().
@@ -607,7 +607,7 @@ public class PBHelper {
       setGenerationStamp(b.getGenerationStamp()).
       build();
   }
-  
+
   public static RecoveringBlockProto convert(RecoveringBlock b) {
     if (b == null) {
       return null;
@@ -627,41 +627,41 @@ public class PBHelper {
         new RecoveringBlock(block, locs, PBHelper.convert(b.getTruncateBlock())) :
         new RecoveringBlock(block, locs, b.getNewGenStamp());
   }
-  
+
   public static DatanodeInfoProto.AdminState convert(
       final DatanodeInfo.AdminStates inAs) {
     switch (inAs) {
     case NORMAL: return  DatanodeInfoProto.AdminState.NORMAL;
-    case DECOMMISSION_INPROGRESS: 
+    case DECOMMISSION_INPROGRESS:
         return DatanodeInfoProto.AdminState.DECOMMISSION_INPROGRESS;
     case DECOMMISSIONED: return DatanodeInfoProto.AdminState.DECOMMISSIONED;
     default: return DatanodeInfoProto.AdminState.NORMAL;
     }
   }
-  
+
   static public DatanodeInfo convert(DatanodeInfoProto di) {
     if (di == null) return null;
     return new DatanodeInfo(
         PBHelper.convert(di.getId()),
-        di.hasLocation() ? di.getLocation() : null , 
+        di.hasLocation() ? di.getLocation() : null ,
         di.getCapacity(),  di.getDfsUsed(),  di.getRemaining(),
         di.getBlockPoolUsed(), di.getCacheCapacity(), di.getCacheUsed(),
         di.getLastUpdate(), di.getLastUpdateMonotonic(),
         di.getXceiverCount(), PBHelper.convert(di.getAdminState()));
   }
-  
+
   static public DatanodeInfoProto convertDatanodeInfo(DatanodeInfo di) {
     if (di == null) return null;
     return convert(di);
   }
-  
-  
+
+
   static public DatanodeInfo[] convert(DatanodeInfoProto di[]) {
     if (di == null) return null;
     DatanodeInfo[] result = new DatanodeInfo[di.length];
     for (int i = 0; i < di.length; i++) {
       result[i] = convert(di[i]);
-    }    
+    }
     return result;
   }
 
@@ -669,7 +669,7 @@ public class PBHelper {
       DatanodeInfo[] dnInfos) {
     return convert(dnInfos, 0);
   }
-  
+
   /**
    * Copy from {@code dnInfos} to a target of list of same size starting at
    * {@code startIdx}.
@@ -693,7 +693,7 @@ public class PBHelper {
     }
     return info;
   }
-  
+
   public static DatanodeInfoProto convert(DatanodeInfo info) {
     DatanodeInfoProto.Builder builder = DatanodeInfoProto.newBuilder();
     if (info.getNetworkLocation() != null) {
@@ -761,7 +761,7 @@ public class PBHelper {
       return AdminStates.NORMAL;
     }
   }
-  
+
   public static LocatedBlockProto convert(LocatedBlock b) {
     if (b == null) return null;
     Builder builder = LocatedBlockProto.newBuilder();
@@ -796,7 +796,7 @@ public class PBHelper {
         .setBlockToken(PBHelper.convert(b.getBlockToken()))
         .setCorrupt(b.isCorrupt()).setOffset(b.getStartOffset()).build();
   }
-  
+
   public static LocatedBlock convert(LocatedBlockProto proto) {
     if (proto == null) return null;
     List<DatanodeInfoProto> locs = proto.getLocsList();
@@ -839,9 +839,9 @@ public class PBHelper {
               setIdentifier(ByteString.copyFrom(tok.getIdentifier())).
               setPassword(ByteString.copyFrom(tok.getPassword())).
               setKind(tok.getKind().toString()).
-              setService(tok.getService().toString()).build(); 
+              setService(tok.getService().toString()).build();
   }
-  
+
   public static Token<BlockTokenIdentifier> convert(
       TokenProto blockToken) {
     return new Token<BlockTokenIdentifier>(blockToken.getIdentifier()
@@ -849,7 +849,7 @@ public class PBHelper {
         blockToken.getKind()), new Text(blockToken.getService()));
   }
 
-  
+
   public static Token<DelegationTokenIdentifier> convertDelegationToken(
       TokenProto blockToken) {
     return new Token<DelegationTokenIdentifier>(blockToken.getIdentifier()
@@ -888,7 +888,7 @@ public class PBHelper {
       return ReplicaStateProto.FINALIZED;
     }
   }
-  
+
   public static DatanodeRegistrationProto convert(
       DatanodeRegistration registration) {
     DatanodeRegistrationProto.Builder builder = DatanodeRegistrationProto
@@ -925,7 +925,7 @@ public class PBHelper {
       return null;
     }
   }
-  
+
   public static BalancerBandwidthCommandProto convert(
       BalancerBandwidthCommand bbCmd) {
     return BalancerBandwidthCommandProto.newBuilder()
@@ -1091,7 +1091,7 @@ public class PBHelper {
     List<RecoveringBlockProto> list = recoveryCmd.getBlocksList();
     List<RecoveringBlock> recoveringBlocks = new ArrayList<RecoveringBlock>(
         list.size());
-    
+
     for (RecoveringBlockProto rbp : list) {
       recoveringBlocks.add(PBHelper.convert(rbp));
     }
@@ -1185,9 +1185,9 @@ public class PBHelper {
 
   public static ReceivedDeletedBlockInfoProto convert(
       ReceivedDeletedBlockInfo receivedDeletedBlockInfo) {
-    ReceivedDeletedBlockInfoProto.Builder builder = 
+    ReceivedDeletedBlockInfoProto.Builder builder =
         ReceivedDeletedBlockInfoProto.newBuilder();
-    
+
     ReceivedDeletedBlockInfoProto.BlockStatus status;
     switch (receivedDeletedBlockInfo.getStatus()) {
     case RECEIVING_BLOCK:
@@ -1204,7 +1204,7 @@ public class PBHelper {
           receivedDeletedBlockInfo.getStatus());
     }
     builder.setStatus(status);
-    
+
     if (receivedDeletedBlockInfo.getDelHints() != null) {
       builder.setDeleteHint(receivedDeletedBlockInfo.getDelHints());
     }
@@ -1231,7 +1231,7 @@ public class PBHelper {
         status,
         proto.hasDeleteHint() ? proto.getDeleteHint() : null);
   }
-  
+
   public static NamespaceInfoProto convert(NamespaceInfo info) {
     return NamespaceInfoProto.newBuilder()
         .setBlockPoolID(info.getBlockPoolID())
@@ -1242,32 +1242,32 @@ public class PBHelper {
         .setCapabilities(info.getCapabilities())
         .build();
   }
-  
+
   // Located Block Arrays and Lists
   public static LocatedBlockProto[] convertLocatedBlock(LocatedBlock[] lb) {
     if (lb == null) return null;
     return convertLocatedBlock2(Arrays.asList(lb)).toArray(
         new LocatedBlockProto[lb.length]);
   }
-  
+
   public static LocatedBlock[] convertLocatedBlock(LocatedBlockProto[] lb) {
     if (lb == null) return null;
     return convertLocatedBlock(Arrays.asList(lb)).toArray(
         new LocatedBlock[lb.length]);
   }
-  
+
   public static List<LocatedBlock> convertLocatedBlock(
       List<LocatedBlockProto> lb) {
     if (lb == null) return null;
     final int len = lb.size();
-    List<LocatedBlock> result = 
+    List<LocatedBlock> result =
         new ArrayList<LocatedBlock>(len);
     for (int i = 0; i < len; ++i) {
       result.add(PBHelper.convert(lb.get(i)));
     }
     return result;
   }
-  
+
   public static List<LocatedBlockProto> convertLocatedBlock2(List<LocatedBlock> lb) {
     if (lb == null) return null;
     final int len = lb.size();
@@ -1277,8 +1277,8 @@ public class PBHelper {
     }
     return result;
   }
-  
-  
+
+
   // LocatedBlocks
   public static LocatedBlocks convert(LocatedBlocksProto lb) {
     return new LocatedBlocks(
@@ -1289,12 +1289,12 @@ public class PBHelper {
         lb.hasFileEncryptionInfo() ? convert(lb.getFileEncryptionInfo()) :
             null);
   }
-  
+
   public static LocatedBlocksProto convert(LocatedBlocks lb) {
     if (lb == null) {
       return null;
     }
-    LocatedBlocksProto.Builder builder = 
+    LocatedBlocksProto.Builder builder =
         LocatedBlocksProto.newBuilder();
     if (lb.getLastLocatedBlock() != null) {
       builder.setLastBlock(PBHelper.convert(lb.getLastLocatedBlock()));
@@ -1307,7 +1307,7 @@ public class PBHelper {
         .addAllBlocks(PBHelper.convertLocatedBlock2(lb.getLocatedBlocks()))
         .setIsLastBlockComplete(lb.isLastBlockComplete()).build();
   }
-  
+
   // DataEncryptionKey
   public static DataEncryptionKey convert(DataEncryptionKeyProto bet) {
     String encryptionAlgorithm = bet.getEncryptionAlgorithm();
@@ -1318,7 +1318,7 @@ public class PBHelper {
         bet.getExpiryDate(),
         encryptionAlgorithm.isEmpty() ? null : encryptionAlgorithm);
   }
-  
+
   public static DataEncryptionKeyProto convert(DataEncryptionKey bet) {
     DataEncryptionKeyProto.Builder b = DataEncryptionKeyProto.newBuilder()
         .setKeyId(bet.keyId)
@@ -1331,18 +1331,18 @@ public class PBHelper {
     }
     return b.build();
   }
-  
+
   public static FsServerDefaults convert(FsServerDefaultsProto fs) {
     if (fs == null) return null;
     return new FsServerDefaults(
-        fs.getBlockSize(), fs.getBytesPerChecksum(), 
+        fs.getBlockSize(), fs.getBytesPerChecksum(),
         fs.getWritePacketSize(), (short) fs.getReplication(),
         fs.getFileBufferSize(),
         fs.getEncryptDataTransfer(),
         fs.getTrashInterval(),
         PBHelper.convert(fs.getChecksumType()));
   }
-  
+
   public static FsServerDefaultsProto convert(FsServerDefaults fs) {
     if (fs == null) return null;
     return FsServerDefaultsProto.newBuilder().
@@ -1356,17 +1356,17 @@ public class PBHelper {
       .setChecksumType(PBHelper.convert(fs.getChecksumType()))
       .build();
   }
-  
+
   public static FsPermissionProto convert(FsPermission p) {
     return FsPermissionProto.newBuilder().setPerm(p.toExtendedShort()).build();
   }
-  
+
   public static FsPermission convert(FsPermissionProto p) {
     return new FsPermissionExtension((short)p.getPerm());
   }
-  
-  
-  // The creatFlag field in PB is a bitmask whose values are the same a the 
+
+
+  // The creatFlag field in PB is a bitmask whose values are the same a the
   // emum values of CreateFlag
   public static int convertCreateFlag(EnumSetWritable<CreateFlag> flag) {
     int value = 0;
@@ -1387,17 +1387,17 @@ public class PBHelper {
     }
     return value;
   }
-  
+
   public static EnumSetWritable<CreateFlag> convertCreateFlag(int flag) {
-    EnumSet<CreateFlag> result = 
-       EnumSet.noneOf(CreateFlag.class);   
+    EnumSet<CreateFlag> result =
+       EnumSet.noneOf(CreateFlag.class);
     if ((flag & CreateFlagProto.APPEND_VALUE) == CreateFlagProto.APPEND_VALUE) {
       result.add(CreateFlag.APPEND);
     }
     if ((flag & CreateFlagProto.CREATE_VALUE) == CreateFlagProto.CREATE_VALUE) {
       result.add(CreateFlag.CREATE);
     }
-    if ((flag & CreateFlagProto.OVERWRITE_VALUE) 
+    if ((flag & CreateFlagProto.OVERWRITE_VALUE)
         == CreateFlagProto.OVERWRITE_VALUE) {
       result.add(CreateFlag.OVERWRITE);
     }
@@ -1432,11 +1432,11 @@ public class PBHelper {
     if (fs == null)
       return null;
     return new HdfsLocatedFileStatus(
-        fs.getLength(), fs.getFileType().equals(FileType.IS_DIR), 
+        fs.getLength(), fs.getFileType().equals(FileType.IS_DIR),
         fs.getBlockReplication(), fs.getBlocksize(),
         fs.getModificationTime(), fs.getAccessTime(),
-        PBHelper.convert(fs.getPermission()), fs.getOwner(), fs.getGroup(), 
-        fs.getFileType().equals(FileType.IS_SYMLINK) ? 
+        PBHelper.convert(fs.getPermission()), fs.getOwner(), fs.getGroup(),
+        fs.getFileType().equals(FileType.IS_SYMLINK) ?
             fs.getSymlink().toByteArray() : null,
         fs.getPath().toByteArray(),
         fs.hasFileId()? fs.getFileId(): INodeId.GRANDFATHER_INODE_ID,
@@ -1466,7 +1466,7 @@ public class PBHelper {
         sdirStatusProto.getSnapshotQuota(),
         sdirStatusProto.getParentFullpath().toByteArray());
   }
-  
+
   public static HdfsFileStatusProto convert(HdfsFileStatus fs) {
     if (fs == null)
       return null;
@@ -1477,7 +1477,7 @@ public class PBHelper {
       fType = FileType.IS_SYMLINK;
     }
 
-    HdfsFileStatusProto.Builder builder = 
+    HdfsFileStatusProto.Builder builder =
      HdfsFileStatusProto.newBuilder().
       setLength(fs.getLen()).
       setFileType(fType).
@@ -1507,7 +1507,7 @@ public class PBHelper {
     }
     return builder.build();
   }
-  
+
   public static SnapshottableDirectoryStatusProto convert(
       SnapshottableDirectoryStatus status) {
     if (status == null) {
@@ -1519,14 +1519,14 @@ public class PBHelper {
     ByteString parentFullPathBytes = ByteString.copyFrom(
         parentFullPath == null ? DFSUtil.EMPTY_BYTES : parentFullPath);
     HdfsFileStatusProto fs = convert(status.getDirStatus());
-    SnapshottableDirectoryStatusProto.Builder builder = 
+    SnapshottableDirectoryStatusProto.Builder builder =
         SnapshottableDirectoryStatusProto
         .newBuilder().setSnapshotNumber(snapshotNumber)
         .setSnapshotQuota(snapshotQuota).setParentFullpath(parentFullPathBytes)
         .setDirStatus(fs);
     return builder.build();
   }
-  
+
   public static HdfsFileStatusProto[] convert(HdfsFileStatus[] fs) {
     if (fs == null) return null;
     final int len = fs.length;
@@ -1536,7 +1536,7 @@ public class PBHelper {
     }
     return result;
   }
-  
+
   public static HdfsFileStatus[] convert(HdfsFileStatusProto[] fs) {
     if (fs == null) return null;
     final int len = fs.length;
@@ -1546,13 +1546,13 @@ public class PBHelper {
     }
     return result;
   }
-  
+
   public static DirectoryListing convert(DirectoryListingProto dl) {
     if (dl == null)
       return null;
     List<HdfsFileStatusProto> partList =  dl.getPartialListingList();
-    return new DirectoryListing( 
-        partList.isEmpty() ? new HdfsLocatedFileStatus[0] 
+    return new DirectoryListing(
+        partList.isEmpty() ? new HdfsLocatedFileStatus[0]
           : PBHelper.convert(
               partList.toArray(new HdfsFileStatusProto[partList.size()])),
         dl.getRemainingEntries());
@@ -1580,7 +1580,7 @@ public class PBHelper {
         res.getMissingReplOneBlocks();
     return result;
   }
-  
+
   public static GetFsStatsResponseProto convert(long[] fsStats) {
     GetFsStatsResponseProto.Builder result = GetFsStatsResponseProto
         .newBuilder();
@@ -1604,7 +1604,7 @@ public class PBHelper {
           fsStats[ClientProtocol.GET_STATS_MISSING_REPL_ONE_BLOCKS_IDX]);
     return result.build();
   }
-  
+
   public static DatanodeReportTypeProto
     convert(DatanodeReportType t) {
     switch (t) {
@@ -1612,19 +1612,19 @@ public class PBHelper {
     case LIVE: return DatanodeReportTypeProto.LIVE;
     case DEAD: return DatanodeReportTypeProto.DEAD;
     case DECOMMISSIONING: return DatanodeReportTypeProto.DECOMMISSIONING;
-    default: 
+    default:
       throw new IllegalArgumentException("Unexpected data type report:" + t);
     }
   }
-  
-  public static DatanodeReportType 
+
+  public static DatanodeReportType
     convert(DatanodeReportTypeProto t) {
     switch (t) {
     case ALL: return DatanodeReportType.ALL;
     case LIVE: return DatanodeReportType.LIVE;
     case DEAD: return DatanodeReportType.DEAD;
     case DECOMMISSIONING: return DatanodeReportType.DECOMMISSIONING;
-    default: 
+    default:
       throw new IllegalArgumentException("Unexpected data type report:" + t);
     }
   }
@@ -1642,7 +1642,7 @@ public class PBHelper {
       throw new IllegalArgumentException("Unexpected SafeModeAction :" + a);
     }
   }
-  
+
   public static SafeModeAction convert(
       ClientNamenodeProtocolProtos.SafeModeActionProto a) {
     switch (a) {
@@ -1656,7 +1656,7 @@ public class PBHelper {
       throw new IllegalArgumentException("Unexpected SafeModeAction :" + a);
     }
   }
-  
+
   public static RollingUpgradeActionProto convert(RollingUpgradeAction a) {
     switch (a) {
     case QUERY:
@@ -1669,7 +1669,7 @@ public class PBHelper {
       throw new IllegalArgumentException("Unexpected value: " + a);
     }
   }
-  
+
   public static RollingUpgradeAction convert(RollingUpgradeActionProto a) {
     switch (a) {
     case QUERY:
@@ -1726,7 +1726,7 @@ public class PBHelper {
         setCookie(c.getCookie()).
         build();
   }
-  
+
   public static ContentSummary convert(ContentSummaryProto cs) {
     if (cs == null) return null;
     ContentSummary.Builder builder = new ContentSummary.Builder();
@@ -1746,7 +1746,7 @@ public class PBHelper {
     }
     return builder.build();
   }
-  
+
   public static ContentSummaryProto convert(ContentSummary cs) {
     if (cs == null) return null;
     ContentSummaryProto.Builder builder = ContentSummaryProto.newBuilder();
@@ -1837,7 +1837,7 @@ public class PBHelper {
     for (int i = startIdx; i < types.length; ++i) {
       protos.add(convertStorageType(types[i]));
     }
-    return protos; 
+    return protos;
   }
 
   public static StorageTypeProto convertStorageType(StorageType type) {
@@ -1975,8 +1975,8 @@ public class PBHelper {
     return JournalInfoProto.newBuilder().setClusterID(j.getClusterId())
         .setLayoutVersion(j.getLayoutVersion())
         .setNamespaceID(j.getNamespaceId()).build();
-  } 
-  
+  }
+
   public static SnapshottableDirectoryStatus[] convert(
       SnapshottableDirectoryListingProto sdlp) {
     if (sdlp == null)
@@ -1986,7 +1986,7 @@ public class PBHelper {
     if (list.isEmpty()) {
       return new SnapshottableDirectoryStatus[0];
     } else {
-      SnapshottableDirectoryStatus[] result = 
+      SnapshottableDirectoryStatus[] result =
           new SnapshottableDirectoryStatus[list.size()];
       for (int i = 0; i < list.size(); i++) {
         result[i] = PBHelper.convert(list.get(i));
@@ -1994,12 +1994,12 @@ public class PBHelper {
       return result;
     }
   }
-  
+
   public static SnapshottableDirectoryListingProto convert(
       SnapshottableDirectoryStatus[] status) {
     if (status == null)
       return null;
-    SnapshottableDirectoryStatusProto[] protos = 
+    SnapshottableDirectoryStatusProto[] protos =
         new SnapshottableDirectoryStatusProto[status.length];
     for (int i = 0; i < status.length; i++) {
       protos[i] = PBHelper.convert(status[i]);
@@ -2008,7 +2008,7 @@ public class PBHelper {
     return SnapshottableDirectoryListingProto.newBuilder()
         .addAllSnapshottableDirListing(protoList).build();
   }
-  
+
   public static DiffReportEntry convert(SnapshotDiffReportEntryProto entry) {
     if (entry == null) {
       return null;
@@ -2019,7 +2019,7 @@ public class PBHelper {
         .toByteArray(), entry.hasTargetPath() ? entry.getTargetPath()
         .toByteArray() : null);
   }
-  
+
   public static SnapshotDiffReportEntryProto convert(DiffReportEntry entry) {
     if (entry == null) {
       return null;
@@ -2039,7 +2039,7 @@ public class PBHelper {
     }
     return builder.build();
   }
-  
+
   public static SnapshotDiffReport convert(SnapshotDiffReportProto reportProto) {
     if (reportProto == null) {
       return null;
@@ -2058,20 +2058,20 @@ public class PBHelper {
     return new SnapshotDiffReport(snapshotDir, fromSnapshot, toSnapshot,
         entries);
   }
-  
+
   public static SnapshotDiffReportProto convert(SnapshotDiffReport report) {
     if (report == null) {
       return null;
     }
     List<DiffReportEntry> entries = report.getDiffList();
-    List<SnapshotDiffReportEntryProto> entryProtos = 
+    List<SnapshotDiffReportEntryProto> entryProtos =
         new ArrayList<SnapshotDiffReportEntryProto>();
     for (DiffReportEntry entry : entries) {
       SnapshotDiffReportEntryProto entryProto = convert(entry);
       if (entryProto != null)
         entryProtos.add(entryProto);
     }
-    
+
     SnapshotDiffReportProto reportProto = SnapshotDiffReportProto.newBuilder()
         .setSnapshotRoot(report.getSnapshotRoot())
         .setFromSnapshot(report.getFromSnapshot())
@@ -2086,7 +2086,7 @@ public class PBHelper {
 
   public static CacheDirectiveInfoProto convert
       (CacheDirectiveInfo info) {
-    CacheDirectiveInfoProto.Builder builder = 
+    CacheDirectiveInfoProto.Builder builder =
         CacheDirectiveInfoProto.newBuilder();
     if (info.getId() != null) {
       builder.setId(info.getId());
@@ -2146,7 +2146,7 @@ public class PBHelper {
   }
 
   public static CacheDirectiveStatsProto convert(CacheDirectiveStats stats) {
-    CacheDirectiveStatsProto.Builder builder = 
+    CacheDirectiveStatsProto.Builder builder =
         CacheDirectiveStatsProto.newBuilder();
     builder.setBytesNeeded(stats.getBytesNeeded());
     builder.setBytesCached(stats.getBytesCached());
@@ -2155,7 +2155,7 @@ public class PBHelper {
     builder.setHasExpired(stats.hasExpired());
     return builder.build();
   }
-  
+
   public static CacheDirectiveStats convert(CacheDirectiveStatsProto proto) {
     CacheDirectiveStats.Builder builder = new CacheDirectiveStats.Builder();
     builder.setBytesNeeded(proto.getBytesNeeded());
@@ -2167,13 +2167,13 @@ public class PBHelper {
   }
 
   public static CacheDirectiveEntryProto convert(CacheDirectiveEntry entry) {
-    CacheDirectiveEntryProto.Builder builder = 
+    CacheDirectiveEntryProto.Builder builder =
         CacheDirectiveEntryProto.newBuilder();
     builder.setInfo(PBHelper.convert(entry.getInfo()));
     builder.setStats(PBHelper.convert(entry.getStats()));
     return builder.build();
   }
-  
+
   public static CacheDirectiveEntry convert(CacheDirectiveEntryProto proto) {
     CacheDirectiveInfo info = PBHelper.convert(proto.getInfo());
     CacheDirectiveStats stats = PBHelper.convert(proto.getStats());
@@ -2255,7 +2255,7 @@ public class PBHelper {
     CachePoolStats stats = PBHelper.convert(proto.getStats());
     return new CachePoolEntry(info, stats);
   }
-  
+
   public static HdfsProtos.ChecksumTypeProto convert(DataChecksum.Type type) {
     return HdfsProtos.ChecksumTypeProto.valueOf(type.id);
   }
@@ -2285,6 +2285,7 @@ public class PBHelper {
     return new ExactSizeInputStream(input, size);
   }
 
+
   private static AclEntryScopeProto convert(AclEntryScope v) {
     return AclEntryScopeProto.valueOf(v.ordinal());
   }
@@ -2300,11 +2301,11 @@ public class PBHelper {
   private static AclEntryType convert(AclEntryTypeProto v) {
     return castEnum(v, ACL_ENTRY_TYPE_VALUES);
   }
-  
+
   private static XAttrNamespaceProto convert(XAttr.NameSpace v) {
     return XAttrNamespaceProto.valueOf(v.ordinal());
   }
-  
+
   private static XAttr.NameSpace convert(XAttrNamespaceProto v) {
     return castEnum(v, XATTR_NAMESPACE_VALUES);
   }
@@ -2370,7 +2371,7 @@ public class PBHelper {
     AclStatusProto r = builder.build();
     return GetAclStatusResponseProto.newBuilder().setResult(r).build();
   }
-  
+
   public static XAttrProto convertXAttrProto(XAttr a) {
     XAttrProto.Builder builder = XAttrProto.newBuilder();
     builder.setNamespace(convert(a.getNameSpace()));
@@ -2382,7 +2383,7 @@ public class PBHelper {
     }
     return builder.build();
   }
-  
+
   public static List<XAttrProto> convertXAttrProto(
       List<XAttr> xAttrSpec) {
     if (xAttrSpec == null) {
@@ -2403,9 +2404,9 @@ public class PBHelper {
     }
     return xAttrs;
   }
-  
+
   /**
-   * The flag field in PB is a bitmask whose values are the same a the 
+   * The flag field in PB is a bitmask whose values are the same a the
    * emum values of XAttrSetFlag
    */
   public static int convert(EnumSet<XAttrSetFlag> flag) {
@@ -2418,21 +2419,21 @@ public class PBHelper {
     }
     return value;
   }
- 
+
   public static EnumSet<XAttrSetFlag> convert(int flag) {
-    EnumSet<XAttrSetFlag> result = 
+    EnumSet<XAttrSetFlag> result =
         EnumSet.noneOf(XAttrSetFlag.class);
-    if ((flag & XAttrSetFlagProto.XATTR_CREATE_VALUE) == 
+    if ((flag & XAttrSetFlagProto.XATTR_CREATE_VALUE) ==
         XAttrSetFlagProto.XATTR_CREATE_VALUE) {
       result.add(XAttrSetFlag.CREATE);
     }
-    if ((flag & XAttrSetFlagProto.XATTR_REPLACE_VALUE) == 
+    if ((flag & XAttrSetFlagProto.XATTR_REPLACE_VALUE) ==
         XAttrSetFlagProto.XATTR_REPLACE_VALUE) {
       result.add(XAttrSetFlag.REPLACE);
     }
     return result;
   }
-  
+
   public static XAttr convertXAttr(XAttrProto a) {
     XAttr.Builder builder = new XAttr.Builder();
     builder.setNameSpace(convert(a.getNamespace()));
@@ -2444,7 +2445,7 @@ public class PBHelper {
     }
     return builder.build();
   }
-  
+
   public static List<XAttr> convertXAttrs(List<XAttrProto> xAttrSpec) {
     ArrayList<XAttr> xAttrs = Lists.newArrayListWithCapacity(xAttrSpec.size());
     for (XAttrProto a : xAttrSpec) {
@@ -2806,7 +2807,7 @@ public class PBHelper {
     return GetEditsFromTxidResponseProto.newBuilder().setEventsList(
         builder.build()).build();
   }
-  
+
   public static CipherOptionProto convert(CipherOption option) {
     if (option != null) {
       CipherOptionProto.Builder builder = CipherOptionProto.
@@ -2830,7 +2831,7 @@ public class PBHelper {
     }
     return null;
   }
-  
+
   public static CipherOption convert(CipherOptionProto proto) {
     if (proto != null) {
       CipherSuite suite = null;
@@ -2857,11 +2858,11 @@ public class PBHelper {
     }
     return null;
   }
-  
+
   public static List<CipherOptionProto> convertCipherOptions(
       List<CipherOption> options) {
     if (options != null) {
-      List<CipherOptionProto> protos = 
+      List<CipherOptionProto> protos =
           Lists.newArrayListWithCapacity(options.size());
       for (CipherOption option : options) {
         protos.add(convert(option));
@@ -2870,11 +2871,11 @@ public class PBHelper {
     }
     return null;
   }
-  
+
   public static List<CipherOption> convertCipherOptionProtos(
       List<CipherOptionProto> protos) {
     if (protos != null) {
-      List<CipherOption> options = 
+      List<CipherOption> options =
           Lists.newArrayListWithCapacity(protos.size());
       for (CipherOptionProto proto : protos) {
         options.add(convert(proto));
