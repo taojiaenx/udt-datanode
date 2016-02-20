@@ -80,7 +80,28 @@ public abstract class DNObjectDecoder extends ReplayingDecoder<State>{
 			try {
 			final OpWriteBlockProto proto = (OpWriteBlockProto) protobufDecoder.decode(in);
 			if (proto != null) {
-				opWriteBlock(proto, ctx,in);
+			    final DatanodeInfo[] targets = PBHelper.convert(proto.getTargetsList());
+			    TraceScope traceScope = continueTraceSpan(proto.getHeader(),
+			        proto.getClass().getSimpleName());
+				writeBlock(PBHelper.convert(proto.getHeader().getBaseHeader().getBlock()),
+				          PBHelper.convertStorageType(proto.getStorageType()),
+				          PBHelper.convert(proto.getHeader().getBaseHeader().getToken()),
+				          proto.getHeader().getClientName(),
+				          targets,
+				          PBHelper.convertStorageTypes(proto.getTargetStorageTypesList(), targets.length),
+				          PBHelper.convert(proto.getSource()),
+				          fromProto(proto.getStage()),
+				          proto.getPipelineSize(),
+				          proto.getMinBytesRcvd(), proto.getMaxBytesRcvd(),
+				          proto.getLatestGenerationStamp(),
+				          fromProto(proto.getRequestedChecksum()),
+				          (proto.hasCachingStrategy() ?
+				              getCachingStrategy(proto.getCachingStrategy()) :
+				            CachingStrategy.newDefaultStrategy()),
+				          (proto.hasAllowLazyPersist() ? proto.getAllowLazyPersist() : false),
+				          (proto.hasPinning() ? proto.getPinning(): false),
+				          (PBHelper.convertBooleanList(proto.getTargetPinningsList())),
+				          ctx,in,out);
 			}
 			} catch(Throwable t) {
 
@@ -120,7 +141,7 @@ public abstract class DNObjectDecoder extends ReplayingDecoder<State>{
 
 	private void sloveProccessingError(Op op, Throwable t, ChannelHandlerContext ctx) {
 		String s = datanode.getDisplayName() + ":DataXceiver error processing " + ((op == null) ? "unknown" : op.name())
-				+ " operation " + " src: " + ctx.channel().remoteAddress().toString() + " dst: " + localAddress;
+				+ " operation " + " src: " + ctx.channel().remoteAddress().toString();
 		if (op == Op.WRITE_BLOCK && t instanceof ReplicaAlreadyExistsException) {
 			// For WRITE_BLOCK, it is okay if the replica already exists since
 			// client and replication may write the same block to the same
@@ -149,8 +170,9 @@ public abstract class DNObjectDecoder extends ReplayingDecoder<State>{
 	 * @param ctx
 	 * @param in
 	 * @param out
+	 * @throws IOException 
 	 */
-	protected  void opWriteBlock(final OpWriteBlockProto proto, final ChannelHandlerContext ctx, final ByteBuf in, final List<Object> out) {
+	protected  void opWriteBlock(final OpWriteBlockProto proto, final ChannelHandlerContext ctx, final ByteBuf in, final List<Object> out) throws IOException {
 	    final DatanodeInfo[] targets = PBHelper.convert(proto.getTargetsList());
 	    TraceScope traceScope = continueTraceSpan(proto.getHeader(),
 	        proto.getClass().getSimpleName());
@@ -173,7 +195,7 @@ public abstract class DNObjectDecoder extends ReplayingDecoder<State>{
 	          (proto.hasAllowLazyPersist() ? proto.getAllowLazyPersist() : false),
 	          (proto.hasPinning() ? proto.getPinning(): false),
 	          (PBHelper.convertBooleanList(proto.getTargetPinningsList())),
-	          proto, ctx, in,out);
+	          ctx, in,out);
 	    } finally {
 	     if (traceScope != null) traceScope.close();
 	    }
