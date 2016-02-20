@@ -31,6 +31,9 @@ public class DNRequestDecoder extends DNObjectDecoder{
 		super(datanode);
 	}
 
+	/**
+	 * 写方法的处理
+	 */
 	@Override
 	protected void writeBlock(final ExtendedBlock block,
 		      final StorageType storageType,
