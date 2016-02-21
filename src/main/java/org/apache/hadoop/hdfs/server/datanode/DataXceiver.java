@@ -649,18 +649,23 @@ class DataXceiver extends Receiver implements Runnable {
     // We later mutate block's generation stamp and length, but we need to
     // forward the original version of the block to downstream mirrors, so
     // make a copy here.
+    // 在写文件结束之后，我们会修改block的版本号和标签，但是我们
+           //需要向客户端传递原始block的版本，因此在这里做了个拷贝
     final ExtendedBlock originalBlock = new ExtendedBlock(block);
     if (block.getNumBytes() == 0) {
+    	//如果这个块是空的，就写入默认的块大小
       block.setNumBytes(dataXceiverServer.estimateBlockSize);
     }
     LOG.info("Receiving " + block + " src: " + remoteAddress + " dest: "
         + localAddress);
 
     // reply to upstream datanode or client
+    ////如果还有下游节点，这些都是用来建立与downStream的流
     final DataOutputStream replyOut = new DataOutputStream(
         new BufferedOutputStream(
             getOutputStream(),
             HdfsConstants.SMALL_BUFFER_SIZE));
+    //如果对面是客户端就发回应，否则不发
     checkAccess(replyOut, isClient, block, blockToken,
         Op.WRITE_BLOCK, BlockTokenSecretManager.AccessMode.WRITE);
 
@@ -672,11 +677,15 @@ class DataXceiver extends Receiver implements Runnable {
     Status mirrorInStatus = SUCCESS;
     final String storageUuid;
     try {
+    	//如果对方是datanode
       if (isDatanode ||
           stage != BlockConstructionStage.PIPELINE_CLOSE_RECOVERY) {
-        // open a block receiver
+        // open a block receiver BlockReceiver是用来接收具体数据的类，构造函数的具体工作是建立到块文件和meta文件的流
         blockReceiver = new BlockReceiver(block, storageType, in,
+
+        		//连接的客户端的地址
             peer.getRemoteAddressString(),
+            //本地地址
             peer.getLocalAddressString(),
             stage, latestGenerationStamp, minBytesRcvd, maxBytesRcvd,
             clientname, srcDataNode, datanode, requestedChecksum,
@@ -690,7 +699,7 @@ class DataXceiver extends Receiver implements Runnable {
 
       //
       // Connect to downstream machine, if appropriate
-      //
+      //如果targets大于0，表示还有下游节点，先建立与下游节点的流，并等待下游节点的回复
       if (targets.length > 0) {
         InetSocketAddress mirrorTarget = null;
         // Connect to backup machine
@@ -742,6 +751,8 @@ class DataXceiver extends Receiver implements Runnable {
           DataNodeFaultInjector.get().writeBlockAfterFlush();
 
           // read connect ack (only for clients, not for replication req)
+          //// read connect ack (only for clients, not for replication req)
+          //等待下游节点返回
           if (isClient) {
             BlockOpResponseProto connectAck =
               BlockOpResponseProto.parseFrom(PBHelper.vintPrefixed(mirrorIn));
@@ -785,6 +796,7 @@ class DataXceiver extends Receiver implements Runnable {
       }
 
       // send connect-ack to source for clients and not transfer-RBW/Finalized
+      //向上游节点发送流建立的情况，当然只是在是正常client的情况下
       if (isClient && !isTransfer) {
         if (LOG.isDebugEnabled() || mirrorInStatus != SUCCESS) {
           LOG.info("Datanode " + targets.length +
@@ -802,6 +814,7 @@ class DataXceiver extends Receiver implements Runnable {
       // receive the block and mirror to the next target
       if (blockReceiver != null) {
         String mirrorAddr = (mirrorSock == null) ? null : mirrorNode;
+        //接收具体数据
         blockReceiver.receiveBlock(mirrorOut, mirrorIn, replyOut,
             mirrorAddr, null, targets, false);
 
@@ -848,6 +861,7 @@ class DataXceiver extends Receiver implements Runnable {
       blockReceiver = null;
     }
 
+    //更新标记，记录这个节点参加过的动作
     //update metrics
     datanode.metrics.addWriteBlockOp(elapsed());
     datanode.metrics.incrWritesFromClient(peer.isLocal(), size);
@@ -1258,6 +1272,7 @@ class DataXceiver extends Receiver implements Runnable {
     datanode.incrDatanodeNetworkErrors(remoteAddressWithoutPort);
   }
 
+  //判断客户端传来的动作是否符合权限
   private void checkAccess(OutputStream out, final boolean reply,
       final ExtendedBlock blk,
       final Token<BlockTokenIdentifier> t,
@@ -1281,6 +1296,7 @@ class DataXceiver extends Receiver implements Runnable {
               // NB: Unconditionally using the xfer addr w/o hostname
               resp.setFirstBadLink(dnR.getXferAddr());
             }
+            //发错误消息
             resp.build().writeDelimitedTo(out);
             out.flush();
           }
