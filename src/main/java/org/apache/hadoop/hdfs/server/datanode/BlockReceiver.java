@@ -123,6 +123,9 @@ class BlockReceiver implements Closeable {
   private boolean syncOnClose;
   private long restartBudget;
   /** the reference of the volume where the block receiver writes to */
+  /**
+   * 也就是当前block文件的处理接口
+   */
   private ReplicaHandler replicaHandler;
 
   /**
@@ -505,6 +508,7 @@ class BlockReceiver implements Closeable {
     // update received bytes
     final long firstByteInBlock = offsetInBlock;
     offsetInBlock += len;
+    //更新当前block的写入字节数
     if (replicaInfo.getNumBytes() < offsetInBlock) {
       replicaInfo.setNumBytes(offsetInBlock);
     }
@@ -519,6 +523,7 @@ class BlockReceiver implements Closeable {
     if (mirrorOut != null && !mirrorError) {
       try {
         long begin = Time.monotonicNow();
+        //向下游节点发送数据包
         packetReceiver.mirrorPacketTo(mirrorOut);
         mirrorOut.flush();
         long duration = Time.monotonicNow() - begin;
@@ -531,9 +536,12 @@ class BlockReceiver implements Closeable {
       }
     }
 
+    //获取数据段
     ByteBuffer dataBuf = packetReceiver.getDataSlice();
+    //获取校验值
     ByteBuffer checksumBuf = packetReceiver.getChecksumSlice();
 
+    // 最后一个包
     if (lastPacketInBlock || len == 0) {
       if(LOG.isDebugEnabled()) {
         LOG.debug("Receiving an empty packet or the end of the block " + block);
@@ -584,6 +592,7 @@ class BlockReceiver implements Closeable {
 
       // by this point, the data in the buffer uses the disk checksum
 
+      // 此处数据重新生成校验值，写入到磁盘中，之前的那个校验值是给网络包传输用的。
       final boolean shouldNotWriteChecksum = checksumReceivedLen == 0
           && streams.isTransientStorage();
       try {
@@ -598,6 +607,11 @@ class BlockReceiver implements Closeable {
           // resend part of data that is already on disk. Correct number of
           // bytes should be skipped when writing the data and checksum
           // buffers out to disk.
+        	/**
+        	 * 一般来说，每个数据包存到磁盘是，他的起始字节都是对其的(能不快大小整除)
+        	 * 但如果不对其，多余的字节会被放置到下一个chunk中。
+        	 * 为了防止正确数据被重复发送，这里会记录磁盘中 的数据
+        	 */
           long partialChunkSizeOnDisk = onDiskLen % bytesPerChecksum;
           boolean alignedOnDisk = partialChunkSizeOnDisk == 0;
           boolean alignedInPacket = firstByteInBlock % bytesPerChecksum == 0;
@@ -606,6 +620,9 @@ class BlockReceiver implements Closeable {
           // recalculation is necessary if the on-disk data is not chunk-
           // aligned, regardless of whether the beginning of the data in
           // the packet is chunk-aligned.
+          /**
+           * 没有对其，且必须加上crc则要求一个部分CRC校验
+           */
           boolean doPartialCrc = !alignedOnDisk && !shouldNotWriteChecksum;
 
           // If this is a partial chunk, then verify that this is the only
@@ -644,7 +661,7 @@ class BlockReceiver implements Closeable {
           // Actual number of data bytes to write.
           int numBytesToDisk = (int)(offsetInBlock-onDiskLen);
 
-          // Write data to disk.
+          // TODO Write data to disk. 把数据写到磁盘中
           long begin = Time.monotonicNow();
           out.write(dataBuf.array(), startByteToDisk, numBytesToDisk);
           long duration = Time.monotonicNow() - begin;
