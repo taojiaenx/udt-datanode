@@ -53,6 +53,17 @@ class UDTDataXceiverServer extends DataXceiverServer{
 		this.threadFactory = new UtilThreadFactory(threadGroup);
     	this.bossGroup = new NioEventLoopGroup(UDT_MANAGER_COUNT,threadFactory, NioUdtProvider.BYTE_PROVIDER);
     	this.workerGroup = new NioEventLoopGroup(UDT_WORKER_COUNT, threadFactory, NioUdtProvider.BYTE_PROVIDER);
+    	this.mirrorGroup = new NioEventLoopGroup(UDT_WORKER_COUNT, threadFactory, NioUdtProvider.BYTE_PROVIDER);
+    	this.mirrorboot =  new Bootstrap().group(mirrorGroup);
+    	mirrorboot.channelFactory(NioUdtProvider.BYTE_ACCEPTOR).handler(new ChannelInitializer<NioUdtByteConnectorChannel>(){
+
+			@Override
+			protected void initChannel(NioUdtByteConnectorChannel ch) throws Exception {
+				ch.pipeline().addLast(new LoggingHandler(LogLevel.DEBUG),
+						new ProtobufVarint32LengthFieldPrepender());
+				ch.pipeline().addLast( new LoggingHandler(LogLevel.DEBUG),
+						new ProtobufEncoder());
+			}});
     	this.serverBootstarp = new ServerBootstrap()
     			.group(bossGroup, workerGroup).channelFactory(NioUdtProvider.BYTE_ACCEPTOR).childHandler(new ChannelInitializer<NioUdtByteConnectorChannel>(){
 
@@ -69,9 +80,6 @@ class UDTDataXceiverServer extends DataXceiverServer{
     				}
 
     			});
-    	this.mirrorGroup = new NioEventLoop(UDT_WORKER_COUNT);
-    	this.mirrorboot =  new Bootstrap().group(mirrorGroup);
-    	mirrorboot.channelFactory(channelFactory)
 	}
 	@Override
 	  public void run() {

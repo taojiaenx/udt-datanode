@@ -30,6 +30,7 @@ import org.apache.hadoop.security.token.Token;
 import org.apache.hadoop.security.token.SecretManager.InvalidToken;
 import org.apache.hadoop.util.DataChecksum;
 
+import io.netty.bootstrap.Bootstrap;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 
@@ -41,11 +42,14 @@ import io.netty.channel.ChannelHandlerContext;
 public class DNRequestDecoder extends DNObjectDecoder{
 	private String previousOpClientName;
 	final long estimateBlockSize;
+	private Bootstrap mirrorBoot;
 
-	public DNRequestDecoder(DataNode datanode, Configuration conf) {
+	public DNRequestDecoder(DataNode datanode, Configuration conf,
+			Bootstrap mirrorBoot) {
 		super(datanode);
 		this.estimateBlockSize = conf.getLongBytes(DFSConfigKeys.DFS_BLOCK_SIZE_KEY,
 		        DFSConfigKeys.DFS_BLOCK_SIZE_DEFAULT);
+		this.mirrorBoot = mirrorBoot;
 	}
 
 	/**
