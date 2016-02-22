@@ -285,7 +285,7 @@ public class DataNode extends ReconfigurableBase
   volatile boolean shutdownForUpgrade = false;
   private boolean shutdownInProgress = false;
   private BlockPoolManager blockPoolManager;
-  volatile FsDatasetSpi<? extends FsVolumeSpi> data = null;
+  public volatile FsDatasetSpi<? extends FsVolumeSpi> data = null;
   private String clusterId = null;
 
   public final static String EMPTY_DEL_HINT = "";

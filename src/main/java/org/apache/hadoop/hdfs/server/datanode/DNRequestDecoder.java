@@ -23,6 +23,7 @@ import org.apache.hadoop.hdfs.protocol.proto.DataTransferProtos.OpWriteBlockProt
 import org.apache.hadoop.hdfs.protocol.proto.DataTransferProtos.Status;
 import org.apache.hadoop.hdfs.security.token.block.BlockTokenIdentifier;
 import org.apache.hadoop.hdfs.security.token.block.BlockTokenSecretManager;
+import org.apache.hadoop.hdfs.server.datanode.udt.codec.BlockReciverDecoder;
 import org.apache.hadoop.hdfs.server.protocol.DatanodeRegistration;
 import org.apache.hadoop.io.IOUtils;
 import org.apache.hadoop.security.token.Token;
@@ -112,6 +113,34 @@ public class DNRequestDecoder extends DNObjectDecoder{
 	    String firstBadLink = "";           // first datanode that failed in connection setup
 	    Status mirrorInStatus = SUCCESS;
 	    final String storageUuid;
+	    try {;
+	    	if (isDatanode ||
+	    	          stage != BlockConstructionStage.PIPELINE_CLOSE_RECOVERY) {
+	    	        // open a block receiver BlockReceiver是用来接收具体数据的类，构造函数的具体工作是建立到块文件和meta文件的流
+	    		final BlockReciverDecoder blockReceiver = new BlockReciverDecoder(block, storageType, ctx,
+
+	    	        		//连接的客户端的地址
+	    	            ctx.channel().remoteAddress().toString(),
+	    	            //本地地址
+	    	            ctx.channel().localAddress().toString(),
+	    	            stage, latestGenerationStamp, minBytesRcvd, maxBytesRcvd,
+	    	            clientname, srcDataNode, datanode, requestedChecksum,
+	    	            cachingStrategy, allowLazyPersist, pinning);
+
+	    	        storageUuid = blockReceiver.getStorageUuid();
+	    	    	  ctx.pipeline().addLast(group, handlers);
+	    	      } else {
+	    	        storageUuid = datanode.data.recoverClose(
+	    	            block, latestGenerationStamp, minBytesRcvd);
+	    	      }
+
+	    	if (targets.length > 0) {
+	    		mirrorNode = targets[0].getXferAddr(connectToDnViaHostname);
+	            if (LOG.isDebugEnabled()) {
+	              LOG.debug("Connecting to datanode " + mirrorNode);
+	            }
+	    	}
+	    }catch(IOException e){}
 	}
 
 

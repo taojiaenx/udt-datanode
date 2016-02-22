@@ -1,11 +1,13 @@
 package org.apache.hadoop.hdfs.server.datanode;
 
+import io.netty.bootstrap.Bootstrap;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.EventLoopGroup;
+import io.netty.channel.nio.NioEventLoop;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.udt.nio.NioUdtByteConnectorChannel;
 import io.netty.channel.udt.nio.NioUdtProvider;
@@ -38,6 +40,11 @@ class UDTDataXceiverServer extends DataXceiverServer{
 	private final ServerBootstrap serverBootstarp;
 	private final EventLoopGroup bossGroup;
 	private final EventLoopGroup workerGroup;
+	final Bootstrap mirrorboot;
+	/**
+	 * 用于向下游节点通信的group
+	 */
+	private final EventLoopGroup mirrorGroup;
 
 	UDTDataXceiverServer(PeerServer peerServer, final Configuration conf,
 			final DataNode datanode, ThreadGroup threadGroup) {
@@ -62,6 +69,9 @@ class UDTDataXceiverServer extends DataXceiverServer{
     				}
 
     			});
+    	this.mirrorGroup = new NioEventLoop(UDT_WORKER_COUNT);
+    	this.mirrorboot =  new Bootstrap().group(mirrorGroup);
+    	mirrorboot.channelFactory(channelFactory)
 	}
 	@Override
 	  public void run() {
