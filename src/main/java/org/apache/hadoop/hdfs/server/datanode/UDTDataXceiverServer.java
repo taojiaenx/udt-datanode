@@ -9,6 +9,8 @@ import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.udt.nio.NioUdtByteConnectorChannel;
 import io.netty.channel.udt.nio.NioUdtProvider;
+import io.netty.handler.codec.protobuf.ProtobufEncoder;
+import io.netty.handler.codec.protobuf.ProtobufVarint32LengthFieldPrepender;
 import io.netty.handler.logging.LogLevel;
 import io.netty.handler.logging.LoggingHandler;
 import io.netty.util.ReferenceCountUtil;
@@ -21,7 +23,6 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hdfs.net.PeerServer;
-import org.apache.hadoop.hdfs.server.datanode.udt.codec.DNRequestDecoder;
 import org.apache.hadoop.util.Daemon;
 
 /**
@@ -38,7 +39,7 @@ class UDTDataXceiverServer extends DataXceiverServer{
 	private final EventLoopGroup bossGroup;
 	private final EventLoopGroup workerGroup;
 
-	UDTDataXceiverServer(PeerServer peerServer, Configuration conf,
+	UDTDataXceiverServer(PeerServer peerServer, final Configuration conf,
 			final DataNode datanode, ThreadGroup threadGroup) {
 		super(peerServer, conf, datanode);
 		log.info("udt服务器构造成功");
@@ -52,8 +53,12 @@ class UDTDataXceiverServer extends DataXceiverServer{
     				protected void initChannel(NioUdtByteConnectorChannel ch)
     						throws Exception {
     					ch.pipeline().addLast(
-    	                        new LoggingHandler(LogLevel.INFO),
-    	                        new DNRequestDecoder(datanode));
+    	                        new LoggingHandler(LogLevel.DEBUG),
+    	                        new DNRequestDecoder(datanode, conf));
+    					ch.pipeline().addLast(new LoggingHandler(LogLevel.DEBUG),
+    							new ProtobufVarint32LengthFieldPrepender());
+    					ch.pipeline().addLast( new LoggingHandler(LogLevel.DEBUG),
+    							new ProtobufEncoder());
     				}
 
     			});
