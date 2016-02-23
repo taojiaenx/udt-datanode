@@ -72,7 +72,7 @@ class UDTDataXceiverServer extends DataXceiverServer{
     						throws Exception {
     					ch.pipeline().addLast(
     	                        new LoggingHandler(LogLevel.DEBUG),
-    	                        new DNRequestDecoder(datanode, conf));
+    	                        new DNRequestDecoder(datanode, conf, mirrorboot));
     					ch.pipeline().addLast(new LoggingHandler(LogLevel.DEBUG),
     							new ProtobufVarint32LengthFieldPrepender());
     					ch.pipeline().addLast( new LoggingHandler(LogLevel.DEBUG),

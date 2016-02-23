@@ -880,6 +880,7 @@ class BlockReceiver implements Closeable {
       // If this write is for a replication or transfer-RBW/Finalized,
       // then finalize block or convert temporary to RBW.
       // For client-writes, the block is finalized in the PacketResponder.
+      //TODO 写入结束，把brw或者temprorary文件夹中的数据写回。
       if (isDatanode || isTransfer) {
         // Hold a volume reference to finalize block.
         try (ReplicaHandler handler = claimReplicaHandler()) {
