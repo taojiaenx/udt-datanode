@@ -137,6 +137,9 @@ public class DNRequestDecoder extends DNObjectDecoder{
 
 			    	        storageUuid = blockReceiver.getStorageUuid();
 			    	    	  ctx.pipeline().addLast(group, handlers);
+			    	    	  mirrorBoot.connect().addListener(new FuturListener() {
+			    	    		  
+			    	    	  });
 			    	      } else {
 			    	        storageUuid = datanode.data.recoverClose(
 			    	            block, latestGenerationStamp, minBytesRcvd);
