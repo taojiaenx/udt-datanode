@@ -174,4 +174,19 @@ public class BlockReciverDecoder extends SimpleChannelInboundHandler<HttpRequest
 	public String getStorageUuid() {
 		return replicaInfo.getStorageUuid();
 	  }
+	/**
+	 * 进行blockreceive 任务
+	 * @author taojiaen
+	 *
+	 */
+	class BlockRceiveTask implements Runnable{
+
+		@Override
+		public void run() {
+			// TODO Auto-generated method stub
+			
+		}
+		
+	}
 }
+

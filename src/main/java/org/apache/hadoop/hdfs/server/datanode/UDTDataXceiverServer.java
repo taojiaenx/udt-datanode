@@ -17,7 +17,10 @@ import io.netty.handler.logging.LogLevel;
 import io.netty.handler.logging.LoggingHandler;
 import io.netty.util.ReferenceCountUtil;
 
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -40,6 +43,10 @@ class UDTDataXceiverServer extends DataXceiverServer{
 	private final ServerBootstrap serverBootstarp;
 	private final EventLoopGroup bossGroup;
 	private final EventLoopGroup workerGroup;
+	/**
+	 * 用于处理块写入的线程池
+	 */
+	private final EventLoopGroup blockSolverPool;
 	final Bootstrap mirrorboot;
 	/**
 	 * 用于向下游节点通信的group
@@ -51,6 +58,7 @@ class UDTDataXceiverServer extends DataXceiverServer{
 		super(peerServer, conf, datanode);
 		log.info("udt服务器构造成功");
 		this.threadFactory = new UtilThreadFactory(threadGroup);
+		this.blockSolverPool = new NioEventLoopGroup(UDT_WORKER_COUNT, threadFactory);
     	this.bossGroup = new NioEventLoopGroup(UDT_MANAGER_COUNT,threadFactory, NioUdtProvider.BYTE_PROVIDER);
     	this.workerGroup = new NioEventLoopGroup(UDT_WORKER_COUNT, threadFactory, NioUdtProvider.BYTE_PROVIDER);
     	this.mirrorGroup = new NioEventLoopGroup(UDT_WORKER_COUNT, threadFactory, NioUdtProvider.BYTE_PROVIDER);
@@ -71,6 +79,7 @@ class UDTDataXceiverServer extends DataXceiverServer{
     				protected void initChannel(NioUdtByteConnectorChannel ch)
     						throws Exception {
     					ch.pipeline().addLast(
+    							blockSolverPool,
     	                        new LoggingHandler(LogLevel.DEBUG),
     	                        new DNRequestDecoder(datanode, conf, mirrorboot));
     					ch.pipeline().addLast(new LoggingHandler(LogLevel.DEBUG),
