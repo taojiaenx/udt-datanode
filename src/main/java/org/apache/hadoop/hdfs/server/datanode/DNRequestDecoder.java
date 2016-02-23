@@ -73,7 +73,7 @@ public class DNRequestDecoder extends DNObjectDecoder{
 		      final boolean allowLazyPersist,
 		      final boolean pinning,
 		      final boolean[] targetPinnings,
-			ChannelHandlerContext ctx, ByteBuf in, List<Object> out) throws IOException {
+			final ChannelHandlerContext ctx, ByteBuf in, List<Object> out) throws IOException {
 	    previousOpClientName = clientname;
 	    final boolean isDatanode = clientname.length() == 0;
 	    final boolean isClient = !isDatanode;
@@ -110,41 +110,47 @@ public class DNRequestDecoder extends DNObjectDecoder{
 	    checkAccess(ctx, isClient, block, blockToken,
 	            Op.WRITE_BLOCK, BlockTokenSecretManager.AccessMode.WRITE);
 
-	    DataOutputStream mirrorOut = null;  // stream to next target
-	    DataInputStream mirrorIn = null;    // reply from next target
-	    Socket mirrorSock = null;           // socket to next target
-	    String mirrorNode = null;           // the name:port of next target
-	    String firstBadLink = "";           // first datanode that failed in connection setup
-	    Status mirrorInStatus = SUCCESS;
-	    final String storageUuid;
-	    try {;
-	    	if (isDatanode ||
-	    	          stage != BlockConstructionStage.PIPELINE_CLOSE_RECOVERY) {
-	    	        // open a block receiver BlockReceiver是用来接收具体数据的类，构造函数的具体工作是建立到块文件和meta文件的流
-	    		final BlockReciverDecoder blockReceiver = new BlockReciverDecoder(block, storageType, ctx,
+	    final Runnable runnalbe = new Runnable() {
 
-	    	        		//连接的客户端的地址
-	    	            ctx.channel().remoteAddress().toString(),
-	    	            //本地地址
-	    	            ctx.channel().localAddress().toString(),
-	    	            stage, latestGenerationStamp, minBytesRcvd, maxBytesRcvd,
-	    	            clientname, srcDataNode, datanode, requestedChecksum,
-	    	            cachingStrategy, allowLazyPersist, pinning);
+			@Override
+			public void run() {
+				try {
+				    DataOutputStream mirrorOut = null;  // stream to next target
+				    DataInputStream mirrorIn = null;    // reply from next target
+				    Socket mirrorSock = null;           // socket to next target
+				    String mirrorNode = null;           // the name:port of next target
+				    String firstBadLink = "";           // first datanode that failed in connection setup
+				    Status mirrorInStatus = SUCCESS;
+				    final String storageUuid;
+			    	if (isDatanode ||
+			    	          stage != BlockConstructionStage.PIPELINE_CLOSE_RECOVERY) {
+			    	        // open a block receiver BlockReceiver是用来接收具体数据的类，构造函数的具体工作是建立到块文件和meta文件的流
+			    		final BlockReciverDecoder blockReceiver = new BlockReciverDecoder(block, storageType, ctx,
 
-	    	        storageUuid = blockReceiver.getStorageUuid();
-	    	    	  ctx.pipeline().addLast(group, handlers);
-	    	      } else {
-	    	        storageUuid = datanode.data.recoverClose(
-	    	            block, latestGenerationStamp, minBytesRcvd);
-	    	      }
+			    	        		//连接的客户端的地址
+			    	            ctx.channel().remoteAddress().toString(),
+			    	            //本地地址
+			    	            ctx.channel().localAddress().toString(),
+			    	            stage, latestGenerationStamp, minBytesRcvd, maxBytesRcvd,
+			    	            clientname, srcDataNode, datanode, requestedChecksum,
+			    	            cachingStrategy, allowLazyPersist, pinning);
 
-	    	if (targets.length > 0) {
-	    		mirrorNode = targets[0].getXferAddr(connectToDnViaHostname);
-	            if (LOG.isDebugEnabled()) {
-	              LOG.debug("Connecting to datanode " + mirrorNode);
-	            }
-	    	}
-	    }catch(IOException e){}
+			    	        storageUuid = blockReceiver.getStorageUuid();
+			    	    	  ctx.pipeline().addLast(group, handlers);
+			    	      } else {
+			    	        storageUuid = datanode.data.recoverClose(
+			    	            block, latestGenerationStamp, minBytesRcvd);
+			    	      }
+
+			    	if (targets.length > 0) {
+			    		mirrorNode = targets[0].getXferAddr(connectToDnViaHostname);
+			            if (LOG.isDebugEnabled()) {
+			              LOG.debug("Connecting to datanode " + mirrorNode);
+			            }
+			    	}
+			    }catch(IOException e){}
+			}}; 
+			ctx.executor().execute(runnalbe);
 	}
 
 
