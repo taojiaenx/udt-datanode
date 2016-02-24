@@ -20,6 +20,7 @@ import org.apache.hadoop.hdfs.protocol.DatanodeInfo;
 import org.apache.hadoop.hdfs.protocol.ExtendedBlock;
 import org.apache.hadoop.hdfs.protocol.datatransfer.BlockConstructionStage;
 import org.apache.hadoop.hdfs.protocol.datatransfer.Op;
+import org.apache.hadoop.hdfs.protocol.datatransfer.Sender;
 import org.apache.hadoop.hdfs.protocol.proto.DataTransferProtos.BlockOpResponseProto;
 import org.apache.hadoop.hdfs.protocol.proto.DataTransferProtos.OpWriteBlockProto;
 import org.apache.hadoop.hdfs.protocol.proto.DataTransferProtos.Status;
@@ -179,7 +180,34 @@ public class DNRequestDecoder extends DNObjectDecoder{
 						}
 
 						mirrorTarget = NetUtils.createSocketAddr(mirrorNode);
-						mirrorBoot.connect(mirrorTarget).addListener(new MirrorConnectListener());
+						mirrorBoot.connect(mirrorTarget).addListener(new ChannelFutureListener() {
+
+							@Override
+							public void operationComplete(ChannelFuture future) throws Exception {
+								if (future.isSuccess()) {
+									if (targetPinnings != null && targetPinnings.length > 0) {
+										new Sender(future.channel()).writeBlock(originalBlock, targetStorageTypes[0],
+												blockToken, clientname, targets, targetStorageTypes, srcDataNode, stage,
+												pipelineSize, minBytesRcvd, maxBytesRcvd, latestGenerationStamp,
+												requestedChecksum, cachingStrategy, false, targetPinnings[0],
+												targetPinnings);
+									} else {
+										new Sender(future.channel()).writeBlock(originalBlock, targetStorageTypes[0],
+												blockToken, clientname, targets, targetStorageTypes, srcDataNode, stage,
+												pipelineSize, minBytesRcvd, maxBytesRcvd, latestGenerationStamp,
+												requestedChecksum, cachingStrategy, false, false, targetPinnings);
+									}
+									DataNodeFaultInjector.get().writeBlockAfterFlush();
+								} else {
+									try {
+										future.get();
+									} catch (Exception e) {
+										solveMirrorAckError(e);
+									}
+								}
+							}
+
+						});
 					}
 				} catch (IOException e) {
 				}
@@ -261,12 +289,18 @@ public class DNRequestDecoder extends DNObjectDecoder{
 	    }
 	  }
 
+	  /**
+	   *
+	   * @author taojiaen
+	   *镜像连接监听器
+	   */
 	class MirrorConnectListener implements ChannelFutureListener{
 
 		@Override
 		public void operationComplete(ChannelFuture future) throws Exception {
 			if (future.isSuccess()) {
-
+				future.writeAndFlush(msg);
+				DataNodeFaultInjector.get().writeBlockAfterFlush();
 			} else {
 				try {
 					future.get();
@@ -308,5 +342,5 @@ public class DNRequestDecoder extends DNObjectDecoder{
 			solveMirrorAckError(cause);
 			super.exceptionCaught(ctx, cause);
 	    }
-	};
+	}
 }

@@ -53,15 +53,23 @@ import org.apache.htrace.Span;
 
 import com.google.protobuf.Message;
 
+import io.netty.channel.Channel;
+
 /** Sender */
 @InterfaceAudience.Private
 @InterfaceStability.Evolving
 public class Sender implements DataTransferProtocol {
   private final DataOutputStream out;
+  private final Channel channel;
 
   /** Create a sender for DataTransferProtocol with a output stream. */
   public Sender(final DataOutputStream out) {
-    this.out = out;    
+    this.out = out;
+    this.channel = null;
+  }
+  public Sender(final Channel channel) {
+	  this.out = null;
+	  this.channel = channel;
   }
 
   /** Initialize a operation. */
@@ -81,6 +89,16 @@ public class Sender implements DataTransferProtocol {
     proto.writeDelimitedTo(out);
     out.flush();
   }
+  private static void send(final Channel channel, final Op opcode,
+	      final Message proto) throws IOException {
+	    if (LOG.isTraceEnabled()) {
+	      LOG.trace("Sending DataTransferOp " + proto.getClass().getSimpleName()
+	          + ": " + proto);
+	    }
+	    channel.write(opcode);
+	    channel.write(proto);
+	    channel.flush();
+	  }
 
   static private CachingStrategyProto getCachingStrategy(CachingStrategy cachingStrategy) {
     CachingStrategyProto.Builder builder = CachingStrategyProto.newBuilder();
@@ -112,15 +130,15 @@ public class Sender implements DataTransferProtocol {
 
     send(out, Op.READ_BLOCK, proto);
   }
-  
+
 
   @Override
   public void writeBlock(final ExtendedBlock blk,
-      final StorageType storageType, 
+      final StorageType storageType,
       final Token<BlockTokenIdentifier> blockToken,
       final String clientName,
       final DatanodeInfo[] targets,
-      final StorageType[] targetStorageTypes, 
+      final StorageType[] targetStorageTypes,
       final DatanodeInfo source,
       final BlockConstructionStage stage,
       final int pipelineSize,
@@ -134,7 +152,7 @@ public class Sender implements DataTransferProtocol {
       final boolean[] targetPinnings) throws IOException {
     ClientOperationHeaderProto header = DataTransferProtoUtil.buildClientHeader(
         blk, clientName, blockToken);
-    
+
     ChecksumProto checksumProto =
       DataTransferProtoUtil.toProto(requestedChecksum);
 
@@ -153,12 +171,16 @@ public class Sender implements DataTransferProtocol {
       .setAllowLazyPersist(allowLazyPersist)
       .setPinning(pinning)
       .addAllTargetPinnings(PBHelper.convert(targetPinnings, 1));
-    
+
     if (source != null) {
       proto.setSource(PBHelper.convertDatanodeInfo(source));
     }
 
+    if (out != null) {
     send(out, Op.WRITE_BLOCK, proto.build());
+    } else if (channel != null) {
+    	send(channel, Op.WRITE_BLOCK, proto.build());
+    }
   }
 
   @Override
@@ -167,7 +189,7 @@ public class Sender implements DataTransferProtocol {
       final String clientName,
       final DatanodeInfo[] targets,
       final StorageType[] targetStorageTypes) throws IOException {
-    
+
     OpTransferBlockProto proto = OpTransferBlockProto.newBuilder()
       .setHeader(DataTransferProtoUtil.buildClientHeader(
           blk, clientName, blockToken))
@@ -194,7 +216,7 @@ public class Sender implements DataTransferProtocol {
     OpRequestShortCircuitAccessProto proto = builder.build();
     send(out, Op.REQUEST_SHORT_CIRCUIT_FDS, proto);
   }
-  
+
   @Override
   public void releaseShortCircuitFds(SlotId slotId) throws IOException {
     ReleaseShortCircuitAccessRequestProto.Builder builder =
@@ -222,10 +244,10 @@ public class Sender implements DataTransferProtocol {
     ShortCircuitShmRequestProto proto = builder.build();
     send(out, Op.REQUEST_SHORT_CIRCUIT_SHM, proto);
   }
-  
+
   @Override
   public void replaceBlock(final ExtendedBlock blk,
-      final StorageType storageType, 
+      final StorageType storageType,
       final Token<BlockTokenIdentifier> blockToken,
       final String delHint,
       final DatanodeInfo source) throws IOException {
@@ -235,7 +257,7 @@ public class Sender implements DataTransferProtocol {
       .setDelHint(delHint)
       .setSource(PBHelper.convertDatanodeInfo(source))
       .build();
-    
+
     send(out, Op.REPLACE_BLOCK, proto);
   }
 
@@ -245,7 +267,7 @@ public class Sender implements DataTransferProtocol {
     OpCopyBlockProto proto = OpCopyBlockProto.newBuilder()
       .setHeader(DataTransferProtoUtil.buildBaseHeader(blk, blockToken))
       .build();
-    
+
     send(out, Op.COPY_BLOCK, proto);
   }
 
@@ -255,7 +277,7 @@ public class Sender implements DataTransferProtocol {
     OpBlockChecksumProto proto = OpBlockChecksumProto.newBuilder()
       .setHeader(DataTransferProtoUtil.buildBaseHeader(blk, blockToken))
       .build();
-    
+
     send(out, Op.BLOCK_CHECKSUM, proto);
   }
 }
