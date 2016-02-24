@@ -47,6 +47,10 @@ public abstract class DNObjectDecoder extends ReplayingDecoder<State>{
 	 */
 	private int 	opsProcessed = 0;
 	private final ProtobufDecoder protobufDecoder = new ProtobufDecoder();
+	/**
+	 * 用于测试用的TraceScope
+	 */
+	private TraceScope traceScope = null;
 
 	public DNObjectDecoder(DataNode datanode) {
 		super(State.INITIAL_TYPE);
@@ -78,7 +82,8 @@ public abstract class DNObjectDecoder extends ReplayingDecoder<State>{
 			}
 			break;
 		case OP_WRITE_BLOCK:
-			TraceScope traceScope = null;
+
+			traceScope = null;
 			try {
 			final OpWriteBlockProto proto = (OpWriteBlockProto) protobufDecoder.decode(in);
 			if (proto != null) {
@@ -108,9 +113,6 @@ public abstract class DNObjectDecoder extends ReplayingDecoder<State>{
 			} catch(Throwable t) {
 				sloveProccessingError(Op.WRITE_BLOCK, t, ctx);
 				ctx.close();
-			}finally {
-				if (traceScope != null) traceScope.close();
-				reset();
 			}
 			break;
 		default: break;
@@ -138,6 +140,9 @@ public abstract class DNObjectDecoder extends ReplayingDecoder<State>{
 
 
 	protected void  reset() {
+		if (traceScope != null) {
+			traceScope.close();
+		}
 		checkpoint(State.INITIAL_TYPE);
 	}
 
@@ -168,43 +173,31 @@ public abstract class DNObjectDecoder extends ReplayingDecoder<State>{
 		}
 	}
 
-	/**
-	 * 处理读数据块
-	 * @param ctx
-	 * @param in
-	 * @param out
-	 * @throws IOException
-	 */
-	protected  void opWriteBlock(final OpWriteBlockProto proto, final ChannelHandlerContext ctx, final ByteBuf in, final List<Object> out) throws IOException {
-	    final DatanodeInfo[] targets = PBHelper.convert(proto.getTargetsList());
-	    TraceScope traceScope = continueTraceSpan(proto.getHeader(),
-	        proto.getClass().getSimpleName());
-	    try {
-	      writeBlock(PBHelper.convert(proto.getHeader().getBaseHeader().getBlock()),
-	          PBHelper.convertStorageType(proto.getStorageType()),
-	          PBHelper.convert(proto.getHeader().getBaseHeader().getToken()),
-	          proto.getHeader().getClientName(),
-	          targets,
-	          PBHelper.convertStorageTypes(proto.getTargetStorageTypesList(), targets.length),
-	          PBHelper.convert(proto.getSource()),
-	          fromProto(proto.getStage()),
-	          proto.getPipelineSize(),
-	          proto.getMinBytesRcvd(), proto.getMaxBytesRcvd(),
-	          proto.getLatestGenerationStamp(),
-	          fromProto(proto.getRequestedChecksum()),
-	          (proto.hasCachingStrategy() ?
-	              getCachingStrategy(proto.getCachingStrategy()) :
-	            CachingStrategy.newDefaultStrategy()),
-	          (proto.hasAllowLazyPersist() ? proto.getAllowLazyPersist() : false),
-	          (proto.hasPinning() ? proto.getPinning(): false),
-	          (PBHelper.convertBooleanList(proto.getTargetPinningsList())),
-	          ctx, in,out);
-	    } finally {
-	     if (traceScope != null) traceScope.close();
-	    }
-	}
 
-
+/**
+ * 协数据块操作
+ * @param block
+ * @param storageType
+ * @param blockToken
+ * @param clientname
+ * @param targets
+ * @param targetStorageTypes
+ * @param srcDataNode
+ * @param stage
+ * @param pipelineSize
+ * @param minBytesRcvd
+ * @param maxBytesRcvd
+ * @param latestGenerationStamp
+ * @param requestedChecksum
+ * @param cachingStrategy
+ * @param allowLazyPersist
+ * @param pinning
+ * @param targetPinnings
+ * @param ctx
+ * @param in
+ * @param out
+ * @throws IOException
+ */
 	protected abstract void writeBlock(final ExtendedBlock block,
 		      final StorageType storageType,
 		      final Token<BlockTokenIdentifier> blockToken,
@@ -247,6 +240,18 @@ public abstract class DNObjectDecoder extends ReplayingDecoder<State>{
 	protected void incrDatanodeNetworkErrors(final Channel channel) {
 		datanode.incrDatanodeNetworkErrors(channel.remoteAddress().toString());
 	}
+
+	@Override
+    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause)
+            throws Exception {
+		reset();
+        super.exceptionCaught(ctx, cause);
+    }
+	@Override
+    public void channelInactive(ChannelHandlerContext ctx) throws Exception {
+		reset();
+        super.channelInactive(ctx);
+    }
 
 	/**
 	 * The internal state of {@link DNObjectDecoder}.
