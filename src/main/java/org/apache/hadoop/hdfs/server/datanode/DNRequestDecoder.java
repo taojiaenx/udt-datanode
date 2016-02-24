@@ -7,6 +7,7 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.util.Arrays;
 import java.util.List;
@@ -26,13 +27,20 @@ import org.apache.hadoop.hdfs.security.token.block.BlockTokenSecretManager;
 import org.apache.hadoop.hdfs.server.datanode.udt.codec.BlockReciverDecoder;
 import org.apache.hadoop.hdfs.server.protocol.DatanodeRegistration;
 import org.apache.hadoop.io.IOUtils;
+import org.apache.hadoop.net.NetUtils;
 import org.apache.hadoop.security.token.Token;
 import org.apache.hadoop.security.token.SecretManager.InvalidToken;
 import org.apache.hadoop.util.DataChecksum;
 
 import io.netty.bootstrap.Bootstrap;
 import io.netty.buffer.ByteBuf;
+import io.netty.channel.Channel;
+import io.netty.channel.ChannelFuture;
+import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.SimpleChannelInboundHandler;
+import io.netty.util.concurrent.Future;
+import io.netty.util.concurrent.GenericFutureListener;
 
 /**
  * datanode 请求解析器
@@ -40,9 +48,18 @@ import io.netty.channel.ChannelHandlerContext;
  *
  */
 public class DNRequestDecoder extends DNObjectDecoder{
+	private static final String DATA_PACKET_SOLVER = "DATA_PACKET_SOLVER";
 	private String previousOpClientName;
 	final long estimateBlockSize;
 	private Bootstrap mirrorBoot;
+	private final boolean connectToDnViaHostname;
+	DataOutputStream mirrorOut = null; // stream to next target
+	DataInputStream mirrorIn = null; // reply from next target
+	Socket mirrorSock = null; // socket to next target
+	String mirrorNode = null; // the name:port of next target
+	String firstBadLink = ""; // first datanode that failed in
+								// connection setup
+	Status mirrorInStatus = SUCCESS;
 
 	public DNRequestDecoder(DataNode datanode, Configuration conf,
 			Bootstrap mirrorBoot) {
@@ -50,6 +67,7 @@ public class DNRequestDecoder extends DNObjectDecoder{
 		this.estimateBlockSize = conf.getLongBytes(DFSConfigKeys.DFS_BLOCK_SIZE_KEY,
 		        DFSConfigKeys.DFS_BLOCK_SIZE_DEFAULT);
 		this.mirrorBoot = mirrorBoot;
+		this.connectToDnViaHostname = datanode.getDnConf().connectToDnViaHostname;
 	}
 
 	/**
@@ -68,92 +86,98 @@ public class DNRequestDecoder extends DNObjectDecoder{
 		      final long minBytesRcvd,
 		      final long maxBytesRcvd,
 		      final long latestGenerationStamp,
-		      DataChecksum requestedChecksum,
-		      CachingStrategy cachingStrategy,
+		      final DataChecksum requestedChecksum,
+		      final CachingStrategy cachingStrategy,
 		      final boolean allowLazyPersist,
 		      final boolean pinning,
 		      final boolean[] targetPinnings,
-			final ChannelHandlerContext ctx, ByteBuf in, List<Object> out) throws IOException {
-	    previousOpClientName = clientname;
-	    final boolean isDatanode = clientname.length() == 0;
-	    final boolean isClient = !isDatanode;
-	    final boolean isTransfer = stage == BlockConstructionStage.TRANSFER_RBW
-	        || stage == BlockConstructionStage.TRANSFER_FINALIZED;
-	    long size = 0;
-	    // check single target for transfer-RBW/Finalized
-	    if (isTransfer && targets.length > 0) {
-	      throw new IOException(stage + " does not support multiple targets "
-	          + Arrays.asList(targets));
-	    }
+ final ChannelHandlerContext ctx, ByteBuf in,
+			List<Object> out) throws IOException {
+		previousOpClientName = clientname;
+		final boolean isDatanode = clientname.length() == 0;
+		final boolean isClient = !isDatanode;
+		final boolean isTransfer = stage == BlockConstructionStage.TRANSFER_RBW
+				|| stage == BlockConstructionStage.TRANSFER_FINALIZED;
+		long size = 0;
+		// check single target for transfer-RBW/Finalized
+		if (isTransfer && targets.length > 0) {
+			throw new IOException(stage + " does not support multiple targets " + Arrays.asList(targets));
+		}
 
-	    if (LOG.isDebugEnabled()) {
-	      LOG.debug("opWriteBlock: stage=" + stage + ", clientname=" + clientname
-	      		+ "\n  block  =" + block + ", newGs=" + latestGenerationStamp
-	      		+ ", bytesRcvd=[" + minBytesRcvd + ", " + maxBytesRcvd + "]"
-	          + "\n  targets=" + Arrays.asList(targets)
-	          + "; pipelineSize=" + pipelineSize + ", srcDataNode=" + srcDataNode
-	          + ", pinning=" + pinning);
-	      LOG.debug("isDatanode=" + isDatanode
-	          + ", isClient=" + isClient
-	          + ", isTransfer=" + isTransfer);
-	    /*  LOG.debug("writeBlock receive buf size " + peer.getReceiveBufferSize() +
-	                " tcp no delay " + peer.getTcpNoDelay());*/
-	    }
+		if (LOG.isDebugEnabled()) {
+			LOG.debug("opWriteBlock: stage=" + stage + ", clientname=" + clientname + "\n  block  =" + block
+					+ ", newGs=" + latestGenerationStamp + ", bytesRcvd=[" + minBytesRcvd + ", " + maxBytesRcvd + "]"
+					+ "\n  targets=" + Arrays.asList(targets) + "; pipelineSize=" + pipelineSize + ", srcDataNode="
+					+ srcDataNode + ", pinning=" + pinning);
+			LOG.debug("isDatanode=" + isDatanode + ", isClient=" + isClient + ", isTransfer=" + isTransfer);
+			/*
+			 * LOG.debug("writeBlock receive buf size " +
+			 * peer.getReceiveBufferSize() + " tcp no delay " +
+			 * peer.getTcpNoDelay());
+			 */
+		}
 
-	    final ExtendedBlock originalBlock = new ExtendedBlock(block);
-	    if (block.getNumBytes() == 0) {
-	    	//如果这个块是空的，就写入默认的块大小
-	      block.setNumBytes(estimateBlockSize);
-	    }
-	    LOG.info("Receiving " + block + " src: " + ctx.channel().remoteAddress() + " dest: "
-	        + ctx.channel().localAddress());
-	    checkAccess(ctx, isClient, block, blockToken,
-	            Op.WRITE_BLOCK, BlockTokenSecretManager.AccessMode.WRITE);
+		final ExtendedBlock originalBlock = new ExtendedBlock(block);
+		if (block.getNumBytes() == 0) {
+			// 如果这个块是空的，就写入默认的块大小
+			block.setNumBytes(estimateBlockSize);
+		}
+		LOG.info("Receiving " + block + " src: " + ctx.channel().remoteAddress() + " dest: "
+				+ ctx.channel().localAddress());
+		checkAccess(ctx, isClient, block, blockToken, Op.WRITE_BLOCK, BlockTokenSecretManager.AccessMode.WRITE);
 
-	    final Runnable runnalbe = new Runnable() {
+		final Runnable runnalbe = new Runnable() {
 
 			@Override
 			public void run() {
 				try {
-				    DataOutputStream mirrorOut = null;  // stream to next target
-				    DataInputStream mirrorIn = null;    // reply from next target
-				    Socket mirrorSock = null;           // socket to next target
-				    String mirrorNode = null;           // the name:port of next target
-				    String firstBadLink = "";           // first datanode that failed in connection setup
-				    Status mirrorInStatus = SUCCESS;
-				    final String storageUuid;
-			    	if (isDatanode ||
-			    	          stage != BlockConstructionStage.PIPELINE_CLOSE_RECOVERY) {
-			    	        // open a block receiver BlockReceiver是用来接收具体数据的类，构造函数的具体工作是建立到块文件和meta文件的流
-			    		final BlockReciverDecoder blockReceiver = new BlockReciverDecoder(block, storageType, ctx,
 
-			    	        		//连接的客户端的地址
-			    	            ctx.channel().remoteAddress().toString(),
-			    	            //本地地址
-			    	            ctx.channel().localAddress().toString(),
-			    	            stage, latestGenerationStamp, minBytesRcvd, maxBytesRcvd,
-			    	            clientname, srcDataNode, datanode, requestedChecksum,
-			    	            cachingStrategy, allowLazyPersist, pinning);
 
-			    	        storageUuid = blockReceiver.getStorageUuid();
-			    	    	  ctx.pipeline().addLast(group, handlers);
-			    	    	  mirrorBoot.connect().addListener(new FuturListener() {
-			    	    		  
-			    	    	  });
-			    	      } else {
-			    	        storageUuid = datanode.data.recoverClose(
-			    	            block, latestGenerationStamp, minBytesRcvd);
-			    	      }
 
-			    	if (targets.length > 0) {
-			    		mirrorNode = targets[0].getXferAddr(connectToDnViaHostname);
-			            if (LOG.isDebugEnabled()) {
-			              LOG.debug("Connecting to datanode " + mirrorNode);
-			            }
-			    	}
-			    }catch(IOException e){}
-			}}; 
-			ctx.executor().execute(runnalbe);
+					final String storageUuid;
+					if (isDatanode || stage != BlockConstructionStage.PIPELINE_CLOSE_RECOVERY) {
+						// open a block receiver
+						// BlockReceiver是用来接收具体数据的类，构造函数的具体工作是建立到块文件和meta文件的流
+						final BlockReciverDecoder blockReceiver = new BlockReciverDecoder(block, storageType,
+								ctx.channel(),
+
+								// 连接的客户端的地址
+								ctx.channel().remoteAddress().toString(),
+								// 本地地址
+								ctx.channel().localAddress().toString(), stage, latestGenerationStamp, minBytesRcvd,
+								maxBytesRcvd, clientname, srcDataNode, datanode, requestedChecksum, cachingStrategy,
+								allowLazyPersist, pinning);
+
+						storageUuid = blockReceiver.getStorageUuid();
+						if (ctx.pipeline().get(DATA_PACKET_SOLVER) != null) {
+							ctx.pipeline().replace(DATA_PACKET_SOLVER, DATA_PACKET_SOLVER, blockReceiver);
+						} else {
+							ctx.pipeline().addLast(DATA_PACKET_SOLVER, blockReceiver);
+						}
+					} else {
+						storageUuid = datanode.data.recoverClose(block, latestGenerationStamp, minBytesRcvd);
+					}
+
+					if (targets.length > 0) {
+						InetSocketAddress mirrorTarget = null;
+						mirrorNode = targets[0].getXferAddr(connectToDnViaHostname);
+						if (LOG.isDebugEnabled()) {
+							LOG.debug("Connecting to datanode " + mirrorNode);
+						}
+
+						mirrorTarget = NetUtils.createSocketAddr(mirrorNode);
+						mirrorBoot.connect(mirrorTarget).addListener(new ChannelFutureListener() {
+
+							@Override
+							public void operationComplete(ChannelFuture future) throws Exception {
+
+							}});
+					}
+				} catch (IOException e) {
+				}
+			}
+		};
+		ctx.executor().execute(runnalbe);
 	}
 
 
@@ -204,4 +228,29 @@ public class DNRequestDecoder extends DNObjectDecoder{
 	    }
 	  }
 
+	  /**
+	   * mirror节点ack接收
+	   * @author taojiaen
+	   *
+	   */
+	class PingMirrorDecoder  extends SimpleChannelInboundHandler<BlockOpResponseProto> {
+		private final int targetlength;
+		public PingMirrorDecoder(final int targetlength) {
+			this.targetlength = targetlength;
+		}
+
+		@Override
+		protected void channelRead0(ChannelHandlerContext ctx, BlockOpResponseProto connectAck)
+				throws Exception {
+			mirrorInStatus = connectAck.getStatus();
+            firstBadLink = connectAck.getFirstBadLink();
+            if (LOG.isDebugEnabled() || mirrorInStatus != SUCCESS) {
+              LOG.info("Datanode " + targetlength +
+                       " got response for connect ack " +
+                       " from downstream datanode with firstbadlink as " +
+                       firstBadLink);
+            }
+		}
+
+	};
 }
