@@ -185,6 +185,7 @@ public class DNRequestDecoder extends DNObjectDecoder{
 							@Override
 							public void operationComplete(ChannelFuture future) throws Exception {
 								if (future.isSuccess()) {
+									future.channel().pipeline().addLast(new PingMirrorDecoder(targets.length));
 									if (targetPinnings != null && targetPinnings.length > 0) {
 										new Sender(future.channel()).writeBlock(originalBlock, targetStorageTypes[0],
 												blockToken, clientname, targets, targetStorageTypes, srcDataNode, stage,
@@ -210,6 +211,7 @@ public class DNRequestDecoder extends DNObjectDecoder{
 						});
 					}
 				} catch (IOException e) {
+					solveMirrorAckError(e);
 				}
 			}
 		};
@@ -289,28 +291,6 @@ public class DNRequestDecoder extends DNObjectDecoder{
 	    }
 	  }
 
-	  /**
-	   *
-	   * @author taojiaen
-	   *镜像连接监听器
-	   */
-	class MirrorConnectListener implements ChannelFutureListener{
-
-		@Override
-		public void operationComplete(ChannelFuture future) throws Exception {
-			if (future.isSuccess()) {
-				future.writeAndFlush(msg);
-				DataNodeFaultInjector.get().writeBlockAfterFlush();
-			} else {
-				try {
-					future.get();
-				} catch (Exception e) {
-					solveMirrorAckError(e);
-				}
-			}
-		}
-
-	}
 
 	  /**
 	   * mirror节点ack接收
