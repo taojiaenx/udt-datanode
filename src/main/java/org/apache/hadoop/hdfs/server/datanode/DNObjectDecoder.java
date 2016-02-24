@@ -71,7 +71,7 @@ public abstract class DNObjectDecoder extends ReplayingDecoder<State>{
 			            }
 			          } else {
 			            incrDatanodeNetworkErrors(ctx);
-			            throw err;
+			            ctx.close();
 			          }
 				}
 				return;
@@ -107,7 +107,7 @@ public abstract class DNObjectDecoder extends ReplayingDecoder<State>{
 			}
 			} catch(Throwable t) {
 				sloveProccessingError(Op.WRITE_BLOCK, t, ctx);
-				throw t;
+				ctx.close();
 			}finally {
 				if (traceScope != null) traceScope.close();
 				reset();
