@@ -1,5 +1,6 @@
 package org.apache.hadoop.hdfs.server.datanode;
 
+import static org.apache.hadoop.hdfs.protocol.proto.DataTransferProtos.Status.ERROR;
 import static org.apache.hadoop.hdfs.protocol.proto.DataTransferProtos.Status.ERROR_ACCESS_TOKEN;
 import static org.apache.hadoop.hdfs.protocol.proto.DataTransferProtos.Status.SUCCESS;
 
@@ -60,16 +61,22 @@ public class DNRequestDecoder extends DNObjectDecoder{
 	private Socket mirrorSock = null; // socket to next target
 	private String mirrorNode = null; // the name:port of next target
 	private String firstBadLink = ""; // first datanode that failed in
+	private final Channel clientChannel;
+	/**
+	 * 判断当前的连接是否是真正的客户端
+	 */
+	private boolean isClient = false;
 								// connection setup
 	Status mirrorInStatus = SUCCESS;
 
 	public DNRequestDecoder(DataNode datanode, Configuration conf,
-			Bootstrap mirrorBoot) {
+			Bootstrap mirrorBoot, Channel clientChannel) {
 		super(datanode);
 		this.estimateBlockSize = conf.getLongBytes(DFSConfigKeys.DFS_BLOCK_SIZE_KEY,
 		        DFSConfigKeys.DFS_BLOCK_SIZE_DEFAULT);
 		this.mirrorBoot = mirrorBoot;
 		this.connectToDnViaHostname = datanode.getDnConf().connectToDnViaHostname;
+		this.clientChannel = clientChannel;
 	}
 
 	/**
@@ -97,7 +104,7 @@ public class DNRequestDecoder extends DNObjectDecoder{
 			List<Object> out) throws IOException {
 		previousOpClientName = clientname;
 		final boolean isDatanode = clientname.length() == 0;
-		final boolean isClient = !isDatanode;
+		isClient = !isDatanode;
 		final boolean isTransfer = stage == BlockConstructionStage.TRANSFER_RBW
 				|| stage == BlockConstructionStage.TRANSFER_FINALIZED;
 		long size = 0;
@@ -177,6 +184,31 @@ public class DNRequestDecoder extends DNObjectDecoder{
 		ctx.executor().execute(runnalbe);
 	}
 
+	/**
+	 * 处理ping是的异常
+	 * @param e
+	 */
+	private void solveMirrorAckError(Throwable e) {
+		if (isClient) {
+           /* BlockOpResponseProto.newBuilder()
+              .setStatus(ERROR)
+               // NB: Unconditionally using the xfer addr w/o hostname
+              .setFirstBadLink(targets[0].getXferAddr())
+              .build()
+              .writeDelimitedTo(replyOut);
+            replyOut.flush();*/
+          }
+          if (isClient) {
+        	  clientChannel.close();
+          } else {
+           /* LOG.info(datanode + ":Exception transfering " +
+                     block + " to mirror " + mirrorNode +
+                     "- continuing without the mirror", e);*/
+            incrDatanodeNetworkErrors(clientChannel);
+          }
+       // }
+	}
+
 
 	/**
 	 * 判断客户端传来的动作是否符合权限
@@ -235,7 +267,7 @@ public class DNRequestDecoder extends DNObjectDecoder{
 				try {
 					future.get();
 				} catch (Exception e) {
-
+					solveMirrorAckError(e);
 				}
 			}
 		}
@@ -266,5 +298,11 @@ public class DNRequestDecoder extends DNObjectDecoder{
             }
 		}
 
+		@Override
+	    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause)
+	            throws Exception {
+			solveMirrorAckError(cause);
+			super.exceptionCaught(ctx, cause);
+	    }
 	};
 }

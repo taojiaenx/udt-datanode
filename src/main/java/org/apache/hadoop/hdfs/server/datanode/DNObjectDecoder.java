@@ -28,6 +28,7 @@ import org.apache.hadoop.util.DataChecksum;
 import org.apache.htrace.TraceScope;
 
 import io.netty.buffer.ByteBuf;
+import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.ReplayingDecoder;
 import org.apache.hadoop.hdfs.server.datanode.DNObjectDecoder.State;
@@ -170,7 +171,7 @@ public abstract class DNObjectDecoder extends ReplayingDecoder<State>{
 	 * @param ctx
 	 * @param in
 	 * @param out
-	 * @throws IOException 
+	 * @throws IOException
 	 */
 	protected  void opWriteBlock(final OpWriteBlockProto proto, final ChannelHandlerContext ctx, final ByteBuf in, final List<Object> out) throws IOException {
 	    final DatanodeInfo[] targets = PBHelper.convert(proto.getTargetsList());
@@ -234,8 +235,15 @@ public abstract class DNObjectDecoder extends ReplayingDecoder<State>{
 	 * 记录错误
 	 * @param ctx
 	 */
-	private void incrDatanodeNetworkErrors(final ChannelHandlerContext ctx) {
-		datanode.incrDatanodeNetworkErrors(ctx.channel().remoteAddress().toString());
+	protected void incrDatanodeNetworkErrors(final ChannelHandlerContext ctx) {
+		dincrDatanodeNetworkErrors(ctx.channel());
+	}
+	/**
+	 * 记录错误
+	 * @param ctx
+	 */
+	protected void incrDatanodeNetworkErrors(final Channel channel) {
+		datanode.incrDatanodeNetworkErrors(channel.remoteAddress().toString());
 	}
 
 	/**
