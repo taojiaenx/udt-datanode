@@ -37,7 +37,9 @@ import io.netty.buffer.ByteBuf;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
+import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelPipeline;
 import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.util.concurrent.Future;
 import io.netty.util.concurrent.GenericFutureListener;
@@ -53,11 +55,11 @@ public class DNRequestDecoder extends DNObjectDecoder{
 	final long estimateBlockSize;
 	private Bootstrap mirrorBoot;
 	private final boolean connectToDnViaHostname;
-	DataOutputStream mirrorOut = null; // stream to next target
-	DataInputStream mirrorIn = null; // reply from next target
-	Socket mirrorSock = null; // socket to next target
-	String mirrorNode = null; // the name:port of next target
-	String firstBadLink = ""; // first datanode that failed in
+	private DataOutputStream mirrorOut = null; // stream to next target
+	private DataInputStream mirrorIn = null; // reply from next target
+	private Socket mirrorSock = null; // socket to next target
+	private String mirrorNode = null; // the name:port of next target
+	private String firstBadLink = ""; // first datanode that failed in
 								// connection setup
 	Status mirrorInStatus = SUCCESS;
 
@@ -166,12 +168,7 @@ public class DNRequestDecoder extends DNObjectDecoder{
 						}
 
 						mirrorTarget = NetUtils.createSocketAddr(mirrorNode);
-						mirrorBoot.connect(mirrorTarget).addListener(new ChannelFutureListener() {
-
-							@Override
-							public void operationComplete(ChannelFuture future) throws Exception {
-
-							}});
+						mirrorBoot.connect(mirrorTarget).addListener(new MirrorConnectListener());
 					}
 				} catch (IOException e) {
 				}
@@ -227,6 +224,23 @@ public class DNRequestDecoder extends DNObjectDecoder{
 	      }
 	    }
 	  }
+
+	class MirrorConnectListener implements ChannelFutureListener{
+
+		@Override
+		public void operationComplete(ChannelFuture future) throws Exception {
+			if (future.isSuccess()) {
+
+			} else {
+				try {
+					future.get();
+				} catch (Exception e) {
+
+				}
+			}
+		}
+
+	}
 
 	  /**
 	   * mirror节点ack接收
