@@ -78,11 +78,12 @@ public abstract class DNObjectDecoder extends ReplayingDecoder<State>{
 			}
 			break;
 		case OP_WRITE_BLOCK:
+			TraceScope traceScope = null;
 			try {
 			final OpWriteBlockProto proto = (OpWriteBlockProto) protobufDecoder.decode(in);
 			if (proto != null) {
 			    final DatanodeInfo[] targets = PBHelper.convert(proto.getTargetsList());
-			    TraceScope traceScope = continueTraceSpan(proto.getHeader(),
+			    traceScope = continueTraceSpan(proto.getHeader(),
 			        proto.getClass().getSimpleName());
 				writeBlock(PBHelper.convert(proto.getHeader().getBaseHeader().getBlock()),
 				          PBHelper.convertStorageType(proto.getStorageType()),
@@ -105,9 +106,10 @@ public abstract class DNObjectDecoder extends ReplayingDecoder<State>{
 				          ctx,in,out);
 			}
 			} catch(Throwable t) {
-
+				sloveProccessingError(Op.WRITE_BLOCK, t, ctx);
 				throw t;
 			}finally {
+				if (traceScope != null) traceScope.close();
 				reset();
 			}
 			break;
@@ -236,7 +238,7 @@ public abstract class DNObjectDecoder extends ReplayingDecoder<State>{
 	 * @param ctx
 	 */
 	protected void incrDatanodeNetworkErrors(final ChannelHandlerContext ctx) {
-		dincrDatanodeNetworkErrors(ctx.channel());
+		incrDatanodeNetworkErrors(ctx.channel());
 	}
 	/**
 	 * 记录错误

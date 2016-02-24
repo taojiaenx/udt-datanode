@@ -62,6 +62,8 @@ public class DNRequestDecoder extends DNObjectDecoder{
 	private String mirrorNode = null; // the name:port of next target
 	private String firstBadLink = ""; // first datanode that failed in
 	private final Channel clientChannel;
+	private String curentBlockString = "";
+	private String currentXferAddress = "";
 	/**
 	 * 判断当前的连接是否是真正的客户端
 	 */
@@ -112,6 +114,7 @@ public class DNRequestDecoder extends DNObjectDecoder{
 		if (isTransfer && targets.length > 0) {
 			throw new IOException(stage + " does not support multiple targets " + Arrays.asList(targets));
 		}
+
 
 		if (LOG.isDebugEnabled()) {
 			LOG.debug("opWriteBlock: stage=" + stage + ", clientname=" + clientname + "\n  block  =" + block
@@ -168,6 +171,7 @@ public class DNRequestDecoder extends DNObjectDecoder{
 					}
 
 					if (targets.length > 0) {
+						currentXferAddress = targets[0].getXferAddr();
 						InetSocketAddress mirrorTarget = null;
 						mirrorNode = targets[0].getXferAddr(connectToDnViaHostname);
 						if (LOG.isDebugEnabled()) {
@@ -190,24 +194,24 @@ public class DNRequestDecoder extends DNObjectDecoder{
 	 */
 	private void solveMirrorAckError(Throwable e) {
 		if (isClient) {
-           /* BlockOpResponseProto.newBuilder()
+			/**
+			 * 给客户端发送失败回应
+			 */
+            clientChannel.writeAndFlush(BlockOpResponseProto.newBuilder()
               .setStatus(ERROR)
                // NB: Unconditionally using the xfer addr w/o hostname
-              .setFirstBadLink(targets[0].getXferAddr())
-              .build()
-              .writeDelimitedTo(replyOut);
-            replyOut.flush();*/
+              .setFirstBadLink(currentXferAddress)
+              .build());
           }
           if (isClient) {
         	  clientChannel.close();
           } else {
-           /* LOG.info(datanode + ":Exception transfering " +
-                     block + " to mirror " + mirrorNode +
-                     "- continuing without the mirror", e);*/
+            LOG.info(datanode + ":Exception transfering " +
+            		curentBlockString + " to mirror " + mirrorNode +
+                     "- continuing without the mirror", e);
             incrDatanodeNetworkErrors(clientChannel);
           }
-       // }
-	}
+    }
 
 
 	/**
