@@ -40,6 +40,7 @@ import org.apache.hadoop.hdfs.server.datanode.DNObjectDecoder.State;
  */
 public abstract class DNObjectDecoder extends ReplayingDecoder<State>{
 	protected static final Log LOG = DataNode.LOG;
+	protected static final String DATA_PACKET_SOLVER = "DATA_PACKET_SOLVER";
 
 	protected final DataNode datanode;
 	/**
@@ -82,40 +83,43 @@ public abstract class DNObjectDecoder extends ReplayingDecoder<State>{
 			}
 			break;
 		case OP_WRITE_BLOCK:
+			ctx.pipeline().remove(DATA_PACKET_SOLVER);
 
 			traceScope = null;
 			try {
-			final OpWriteBlockProto proto = (OpWriteBlockProto) protobufDecoder.decode(in);
-			if (proto != null) {
-			    final DatanodeInfo[] targets = PBHelper.convert(proto.getTargetsList());
-			    traceScope = continueTraceSpan(proto.getHeader(),
-			        proto.getClass().getSimpleName());
-				writeBlock(PBHelper.convert(proto.getHeader().getBaseHeader().getBlock()),
-				          PBHelper.convertStorageType(proto.getStorageType()),
-				          PBHelper.convert(proto.getHeader().getBaseHeader().getToken()),
-				          proto.getHeader().getClientName(),
-				          targets,
-				          PBHelper.convertStorageTypes(proto.getTargetStorageTypesList(), targets.length),
-				          PBHelper.convert(proto.getSource()),
-				          fromProto(proto.getStage()),
-				          proto.getPipelineSize(),
-				          proto.getMinBytesRcvd(), proto.getMaxBytesRcvd(),
-				          proto.getLatestGenerationStamp(),
-				          fromProto(proto.getRequestedChecksum()),
-				          (proto.hasCachingStrategy() ?
-				              getCachingStrategy(proto.getCachingStrategy()) :
-				            CachingStrategy.newDefaultStrategy()),
-				          (proto.hasAllowLazyPersist() ? proto.getAllowLazyPersist() : false),
-				          (proto.hasPinning() ? proto.getPinning(): false),
-				          (PBHelper.convertBooleanList(proto.getTargetPinningsList())),
-				          ctx,in,out);
-			}
-			} catch(Throwable t) {
+				final OpWriteBlockProto proto = (OpWriteBlockProto) protobufDecoder.decode(in);
+				if (proto != null) {
+				    beginWrite();
+					final DatanodeInfo[] targets = PBHelper.convert(proto.getTargetsList());
+					traceScope = continueTraceSpan(proto.getHeader(), proto.getClass().getSimpleName());
+					writeBlock(PBHelper.convert(proto.getHeader().getBaseHeader().getBlock()),
+							PBHelper.convertStorageType(proto.getStorageType()),
+							PBHelper.convert(proto.getHeader().getBaseHeader().getToken()),
+							proto.getHeader().getClientName(), targets,
+							PBHelper.convertStorageTypes(proto.getTargetStorageTypesList(), targets.length),
+							PBHelper.convert(proto.getSource()), fromProto(proto.getStage()), proto.getPipelineSize(),
+							proto.getMinBytesRcvd(), proto.getMaxBytesRcvd(), proto.getLatestGenerationStamp(),
+							fromProto(proto.getRequestedChecksum()),
+							(proto.hasCachingStrategy() ? getCachingStrategy(proto.getCachingStrategy())
+									: CachingStrategy.newDefaultStrategy()),
+							(proto.hasAllowLazyPersist() ? proto.getAllowLazyPersist() : false),
+							(proto.hasPinning() ? proto.getPinning() : false),
+							(PBHelper.convertBooleanList(proto.getTargetPinningsList())), ctx, in, out);
+				}
+			} catch (Throwable t) {
 				sloveProccessingError(Op.WRITE_BLOCK, t, ctx);
 				ctx.close();
 			}
 			break;
-		default: break;
+		case CHUNKED_WRITE_BLOCK:
+			if (ctx.pipeline().get(DATA_PACKET_SOLVER) == null) {
+				return;
+			} else {
+				out.add(in);
+			}
+			break;
+		default:
+			break;
 		}
 	}
 
@@ -146,6 +150,10 @@ public abstract class DNObjectDecoder extends ReplayingDecoder<State>{
 		checkpoint(State.INITIAL_TYPE);
 	}
 
+
+	private void beginWrite() {
+		checkpoint(State.CHUNKED_WRITE_BLOCK);
+	}
 
 	private void sloveProccessingError(Op op, Throwable t, ChannelHandlerContext ctx) {
 		String s = datanode.getDisplayName() + ":DataXceiver error processing " + ((op == null) ? "unknown" : op.name())
@@ -260,7 +268,6 @@ public abstract class DNObjectDecoder extends ReplayingDecoder<State>{
 	protected static enum State {
 		INITIAL_TYPE,
 		OP_WRITE_BLOCK,
-		OP_WRITE_BLOCK_INIT,
 		OP_READ_BLOCK,
 	    CHUNKED_WRITE_BLOCK,
 	    BAD_MESSAGE,

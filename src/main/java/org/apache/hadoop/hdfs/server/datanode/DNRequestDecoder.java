@@ -52,7 +52,6 @@ import io.netty.util.concurrent.GenericFutureListener;
  *
  */
 public class DNRequestDecoder extends DNObjectDecoder{
-	private static final String DATA_PACKET_SOLVER = "DATA_PACKET_SOLVER";
 	private String previousOpClientName;
 	final long estimateBlockSize;
 	private Bootstrap mirrorBoot;
@@ -65,6 +64,8 @@ public class DNRequestDecoder extends DNObjectDecoder{
 	private final Channel clientChannel;
 	private String curentBlockString = "";
 	private String currentXferAddress = "";
+	private BlockReciverDecoder blockReceiver = null;
+	private boolean isTransfer = false;
 	/**
 	 * 判断当前的连接是否是真正的客户端
 	 */
@@ -108,7 +109,7 @@ public class DNRequestDecoder extends DNObjectDecoder{
 		previousOpClientName = clientname;
 		final boolean isDatanode = clientname.length() == 0;
 		isClient = !isDatanode;
-		final boolean isTransfer = stage == BlockConstructionStage.TRANSFER_RBW
+		isTransfer = stage == BlockConstructionStage.TRANSFER_RBW
 				|| stage == BlockConstructionStage.TRANSFER_FINALIZED;
 		long size = 0;
 		// check single target for transfer-RBW/Finalized
@@ -145,13 +146,18 @@ public class DNRequestDecoder extends DNObjectDecoder{
 			public void run() {
 				try {
 
-
+					  mirrorOut = null;  // stream to next target
+					     mirrorIn = null;    // reply from next target
+					    mirrorSock = null;           // socket to next target
+					    mirrorNode = null;           // the name:port of next target
+					    firstBadLink = "";           // first datanode that failed in connection setup
+					    mirrorInStatus = SUCCESS;
 
 					final String storageUuid;
 					if (isDatanode || stage != BlockConstructionStage.PIPELINE_CLOSE_RECOVERY) {
 						// open a block receiver
 						// BlockReceiver是用来接收具体数据的类，构造函数的具体工作是建立到块文件和meta文件的流
-						final BlockReciverDecoder blockReceiver = new BlockReciverDecoder(block, storageType,
+						blockReceiver = new BlockReciverDecoder(block, storageType,
 								ctx.channel(),
 
 								// 连接的客户端的地址
@@ -210,12 +216,37 @@ public class DNRequestDecoder extends DNObjectDecoder{
 
 						});
 					}
+
+
+					if (targets.length == 0) {
+						//当没有下游节点需要传输时
+						prepareToWrite(targets.length);
+					}
 				} catch (IOException e) {
 					solveMirrorAckError(e);
 				}
 			}
 		};
 		ctx.executor().execute(runnalbe);
+	}
+
+
+	/**
+	 * 准备读写操作
+	 */
+	private void prepareToWrite(int targetLenth) {
+		//向上游节点发送流建立的情况，当然只是在是正常client的情况下
+	      if (isClient && !isTransfer) {
+	        if (LOG.isDebugEnabled() || mirrorInStatus != SUCCESS) {
+	          LOG.info("Datanode " + targetLenth +
+	                   " forwarding connect ack to upstream firstbadlink is " +
+	                   firstBadLink);
+	        }
+	        clientChannel.writeAndFlush(BlockOpResponseProto.newBuilder()
+	          .setStatus(mirrorInStatus)
+	          .setFirstBadLink(firstBadLink)
+	          .build());
+	      }
 	}
 
 	/**
@@ -314,6 +345,7 @@ public class DNRequestDecoder extends DNObjectDecoder{
                        " from downstream datanode with firstbadlink as " +
                        firstBadLink);
             }
+            prepareToWrite(targetlength);
 		}
 
 		@Override
