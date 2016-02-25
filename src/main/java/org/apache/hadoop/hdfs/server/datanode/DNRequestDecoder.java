@@ -42,6 +42,7 @@ import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPipeline;
+import io.netty.channel.EventLoop;
 import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.util.concurrent.Future;
 import io.netty.util.concurrent.GenericFutureListener;
@@ -104,8 +105,7 @@ public class DNRequestDecoder extends DNObjectDecoder{
 		      final boolean allowLazyPersist,
 		      final boolean pinning,
 		      final boolean[] targetPinnings,
- final ChannelHandlerContext ctx, ByteBuf in,
-			List<Object> out) throws IOException {
+ final ChannelHandlerContext ctx) throws IOException {
 		previousOpClientName = clientname;
 		final boolean isDatanode = clientname.length() == 0;
 		isClient = !isDatanode;
@@ -152,6 +152,7 @@ public class DNRequestDecoder extends DNObjectDecoder{
 					    mirrorNode = null;           // the name:port of next target
 					    firstBadLink = "";           // first datanode that failed in connection setup
 					    mirrorInStatus = SUCCESS;
+					    blockReceiver = null;
 
 					final String storageUuid;
 					if (isDatanode || stage != BlockConstructionStage.PIPELINE_CLOSE_RECOVERY) {
@@ -168,11 +169,6 @@ public class DNRequestDecoder extends DNObjectDecoder{
 								allowLazyPersist, pinning);
 
 						storageUuid = blockReceiver.getStorageUuid();
-						if (ctx.pipeline().get(DATA_PACKET_SOLVER) != null) {
-							ctx.pipeline().replace(DATA_PACKET_SOLVER, DATA_PACKET_SOLVER, blockReceiver);
-						} else {
-							ctx.pipeline().addLast(DATA_PACKET_SOLVER, blockReceiver);
-						}
 					} else {
 						storageUuid = datanode.data.recoverClose(block, latestGenerationStamp, minBytesRcvd);
 					}
@@ -235,18 +231,27 @@ public class DNRequestDecoder extends DNObjectDecoder{
 	 * 准备读写操作
 	 */
 	private void prepareToWrite(int targetLenth) {
-		//向上游节点发送流建立的情况，当然只是在是正常client的情况下
-	      if (isClient && !isTransfer) {
-	        if (LOG.isDebugEnabled() || mirrorInStatus != SUCCESS) {
-	          LOG.info("Datanode " + targetLenth +
-	                   " forwarding connect ack to upstream firstbadlink is " +
-	                   firstBadLink);
-	        }
-	        clientChannel.writeAndFlush(BlockOpResponseProto.newBuilder()
-	          .setStatus(mirrorInStatus)
-	          .setFirstBadLink(firstBadLink)
-	          .build());
-	      }
+		// 向上游节点发送流建立的情况，当然只是在是正常client的情况下
+		if (isClient && !isTransfer) {
+			if (LOG.isDebugEnabled() || mirrorInStatus != SUCCESS) {
+				LOG.info("Datanode " + targetLenth + " forwarding connect ack to upstream firstbadlink is "
+						+ firstBadLink);
+			}
+			clientChannel.writeAndFlush(
+					BlockOpResponseProto.newBuilder().setStatus(mirrorInStatus).setFirstBadLink(firstBadLink).build());
+			addBlockDecoder();
+		}
+	}
+
+	/**
+	 * 加入文件块解析器
+	 */
+	private void addBlockDecoder() {
+		if (blockReceiver != null) {
+			clientChannel.eventLoop()
+					.execute(new HandlerChangeTask(clientChannel.pipeline(), blockReceiver, DATA_PACKET_SOLVER));
+		}
+
 	}
 
 	/**
@@ -355,4 +360,30 @@ public class DNRequestDecoder extends DNObjectDecoder{
 			super.exceptionCaught(ctx, cause);
 	    }
 	}
+
+
+	@Override
+	protected boolean isWriteOperationInitfinished(final ChannelHandlerContext ctx) {
+		return ctx.pipeline().get(DATA_PACKET_SOLVER) != null;
+	}
+}
+class HandlerChangeTask implements Runnable  {
+	private final ChannelPipeline pipeline;
+	private final ChannelHandler handler;
+	private final String handlerName;
+	public HandlerChangeTask(ChannelPipeline pipeline, ChannelHandler handler, final String name) {
+		this.pipeline = pipeline;
+		this.handler = handler;
+		this.handlerName = name;
+	}
+
+	@Override
+	public void run() {
+		if (pipeline.get(handlerName) != null) {
+			pipeline.replace(handlerName, handlerName, handler);
+		} else {
+			pipeline.addLast(handlerName, handler);
+		}
+	}
+
 }

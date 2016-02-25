@@ -2,7 +2,6 @@ package org.apache.hadoop.hdfs.server.datanode;
 
 import static org.apache.hadoop.hdfs.protocol.datatransfer.DataTransferProtoUtil.continueTraceSpan;
 import static org.apache.hadoop.hdfs.protocol.datatransfer.DataTransferProtoUtil.fromProto;
-import static org.apache.hadoop.hdfs.protocolPB.PBHelper.vintPrefixed;
 
 import java.io.EOFException;
 import java.io.IOException;
@@ -11,7 +10,6 @@ import java.nio.channels.ClosedChannelException;
 import java.util.List;
 
 import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.fs.StorageType;
 import org.apache.hadoop.hdfs.protocol.DatanodeInfo;
 import org.apache.hadoop.hdfs.protocol.ExtendedBlock;
@@ -89,7 +87,6 @@ public abstract class DNObjectDecoder extends ReplayingDecoder<State>{
 			try {
 				final OpWriteBlockProto proto = (OpWriteBlockProto) protobufDecoder.decode(in);
 				if (proto != null) {
-				    beginWrite();
 					final DatanodeInfo[] targets = PBHelper.convert(proto.getTargetsList());
 					traceScope = continueTraceSpan(proto.getHeader(), proto.getClass().getSimpleName());
 					writeBlock(PBHelper.convert(proto.getHeader().getBaseHeader().getBlock()),
@@ -104,7 +101,8 @@ public abstract class DNObjectDecoder extends ReplayingDecoder<State>{
 									: CachingStrategy.newDefaultStrategy()),
 							(proto.hasAllowLazyPersist() ? proto.getAllowLazyPersist() : false),
 							(proto.hasPinning() ? proto.getPinning() : false),
-							(PBHelper.convertBooleanList(proto.getTargetPinningsList())), ctx, in, out);
+							(PBHelper.convertBooleanList(proto.getTargetPinningsList())),ctx);
+				    beginWrite();
 				}
 			} catch (Throwable t) {
 				sloveProccessingError(Op.WRITE_BLOCK, t, ctx);
@@ -112,10 +110,10 @@ public abstract class DNObjectDecoder extends ReplayingDecoder<State>{
 			}
 			break;
 		case CHUNKED_WRITE_BLOCK:
-			if (ctx.pipeline().get(DATA_PACKET_SOLVER) == null) {
-				return;
-			} else {
+			if (isWriteOperationInitfinished(ctx)) {
 				out.add(in);
+			} else {
+				return;
 			}
 			break;
 		default:
@@ -222,7 +220,10 @@ public abstract class DNObjectDecoder extends ReplayingDecoder<State>{
 		      CachingStrategy cachingStrategy,
 		      final boolean allowLazyPersist,
 		      final boolean pinning,
-		      final boolean[] targetPinnings, ChannelHandlerContext ctx, ByteBuf in, List<Object> out) throws IOException;
+		      final boolean[] targetPinnings,
+		      final ChannelHandlerContext ctx) throws IOException;
+
+	protected abstract boolean isWriteOperationInitfinished(final ChannelHandlerContext ctx);
 
 	static private CachingStrategy getCachingStrategy(CachingStrategyProto strategy) {
 	    Boolean dropBehind = strategy.hasDropBehind() ?

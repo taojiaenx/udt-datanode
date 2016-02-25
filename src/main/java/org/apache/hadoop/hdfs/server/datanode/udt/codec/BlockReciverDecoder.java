@@ -39,6 +39,7 @@ public class BlockReciverDecoder extends SimpleChannelInboundHandler<HttpRequest
 	private long responseInterval;
 	private boolean isTransfer;
 	private final ReplicaInPipelineInterface replicaInfo;
+
 	public BlockReciverDecoder(final ExtendedBlock block, final StorageType storageType,
 		      final Channel in,
 		      final String inAddr, final String myAddr,
@@ -165,6 +166,11 @@ public class BlockReciverDecoder extends SimpleChannelInboundHandler<HttpRequest
 		    }
 	}
 
+
+
+
+
+
 	@Override
 	protected void channelRead0(ChannelHandlerContext ctx, HttpRequest msg) throws Exception {
 		// TODO Auto-generated method stub
@@ -184,9 +190,9 @@ public class BlockReciverDecoder extends SimpleChannelInboundHandler<HttpRequest
 		@Override
 		public void run() {
 			// TODO Auto-generated method stub
-			
+
 		}
-		
+
 	}
 }
 
