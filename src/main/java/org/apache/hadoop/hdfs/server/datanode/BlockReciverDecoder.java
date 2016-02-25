@@ -1,4 +1,4 @@
-package org.apache.hadoop.hdfs.server.datanode.udt.codec;
+package org.apache.hadoop.hdfs.server.datanode;
 
 
 import java.io.BufferedOutputStream;
@@ -6,18 +6,13 @@ import java.io.DataOutputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 
+import org.apache.commons.logging.Log;
 import org.apache.hadoop.fs.StorageType;
 import org.apache.hadoop.hdfs.protocol.DatanodeInfo;
 import org.apache.hadoop.hdfs.protocol.ExtendedBlock;
 import org.apache.hadoop.hdfs.protocol.HdfsConstants;
 import org.apache.hadoop.hdfs.protocol.datatransfer.BlockConstructionStage;
-import org.apache.hadoop.hdfs.server.datanode.BlockMetadataHeader;
-import org.apache.hadoop.hdfs.server.datanode.CachingStrategy;
-import org.apache.hadoop.hdfs.server.datanode.DataNode;
-import org.apache.hadoop.hdfs.server.datanode.DatanodeUtil;
-import org.apache.hadoop.hdfs.server.datanode.ReplicaAlreadyExistsException;
-import org.apache.hadoop.hdfs.server.datanode.ReplicaInPipelineInterface;
-import org.apache.hadoop.hdfs.server.datanode.ReplicaNotFoundException;
+import org.apache.hadoop.hdfs.protocol.datatransfer.PacketReceiver;
 import org.apache.hadoop.io.IOUtils;
 import org.apache.hadoop.util.DataChecksum;
 
@@ -31,7 +26,8 @@ import io.netty.handler.codec.http.HttpRequest;
  * @author taojiaen
  *
  */
-public class BlockReciverDecoder extends SimpleChannelInboundHandler<HttpRequest> {
+public class BlockReciverDecoder extends SimpleChannelInboundHandler<PacketReceiver> {
+	public static final Log LOG = DataNode.LOG;
 	private boolean isDatanode;
 	private boolean isClient;
 	private long restartBudget;
@@ -39,6 +35,19 @@ public class BlockReciverDecoder extends SimpleChannelInboundHandler<HttpRequest
 	private long responseInterval;
 	private boolean isTransfer;
 	private final ReplicaInPipelineInterface replicaInfo;
+	// Cache management state
+	  private boolean dropCacheBehindWrites;
+	/**
+	   * 也就是当前block文件的处理接口
+	   */
+	  private ReplicaHandler replicaHandler;
+	private boolean syncBehindWrites;
+	private boolean syncBehindWritesInBackground;
+	private DataChecksum clientChecksum;
+	private Object diskChecksum;
+	private boolean needsChecksumTranslation;
+	private Object bytesPerChecksum;
+	private Object checksumSize;
 
 	public BlockReciverDecoder(final ExtendedBlock block, final StorageType storageType,
 		      final Channel in,
@@ -71,7 +80,6 @@ public class BlockReciverDecoder extends SimpleChannelInboundHandler<HttpRequest
 		            );
 		      }
 
-		      Object replicaHandler;
 			//
 		      // Open local disk out
 		      //
@@ -168,15 +176,6 @@ public class BlockReciverDecoder extends SimpleChannelInboundHandler<HttpRequest
 
 
 
-
-
-
-	@Override
-	protected void channelRead0(ChannelHandlerContext ctx, HttpRequest msg) throws Exception {
-		// TODO Auto-generated method stub
-
-	}
-
 	public String getStorageUuid() {
 		return replicaInfo.getStorageUuid();
 	  }
@@ -194,5 +193,18 @@ public class BlockReciverDecoder extends SimpleChannelInboundHandler<HttpRequest
 		}
 
 	}
+	@Override
+	protected void channelRead0(ChannelHandlerContext ctx, PacketReceiver msg) throws Exception {
+		// TODO Auto-generated method stub
+
+	}
+	/** Cleanup a partial block
+	   * if this write is for a replication request (and not from a client)
+	   */
+	  private void cleanupBlock() throws IOException {
+	    if (isDatanode) {
+	      datanode.data.unfinalizeBlock(block);
+	    }
+	  }
 }
 

@@ -26,7 +26,6 @@ import org.apache.hadoop.hdfs.protocol.proto.DataTransferProtos.OpWriteBlockProt
 import org.apache.hadoop.hdfs.protocol.proto.DataTransferProtos.Status;
 import org.apache.hadoop.hdfs.security.token.block.BlockTokenIdentifier;
 import org.apache.hadoop.hdfs.security.token.block.BlockTokenSecretManager;
-import org.apache.hadoop.hdfs.server.datanode.udt.codec.BlockReciverDecoder;
 import org.apache.hadoop.hdfs.server.protocol.DatanodeRegistration;
 import org.apache.hadoop.io.IOUtils;
 import org.apache.hadoop.net.NetUtils;
@@ -216,7 +215,7 @@ public class DNRequestDecoder extends DNObjectDecoder{
 
 					if (targets.length == 0) {
 						//当没有下游节点需要传输时
-						prepareToWrite(targets.length);
+						prepareToWrite(targets.length, null);
 					}
 				} catch (IOException e) {
 					solveMirrorAckError(e);
@@ -230,7 +229,7 @@ public class DNRequestDecoder extends DNObjectDecoder{
 	/**
 	 * 准备读写操作
 	 */
-	private void prepareToWrite(int targetLenth) {
+	private void prepareToWrite(int targetLenth, final Channel mirrorChannel) {
 		// 向上游节点发送流建立的情况，当然只是在是正常client的情况下
 		if (isClient && !isTransfer) {
 			if (LOG.isDebugEnabled() || mirrorInStatus != SUCCESS) {
@@ -239,15 +238,17 @@ public class DNRequestDecoder extends DNObjectDecoder{
 			}
 			clientChannel.writeAndFlush(
 					BlockOpResponseProto.newBuilder().setStatus(mirrorInStatus).setFirstBadLink(firstBadLink).build());
-			addBlockDecoder();
+			addBlockDecoder(mirrorChannel);
 		}
 	}
 
 	/**
 	 * 加入文件块解析器
 	 */
-	private void addBlockDecoder() {
+	private void addBlockDecoder(final Channel mirrorChannel) {
 		if (blockReceiver != null) {
+			//接收具体数据
+	        blockReceiver.receiveBlock(mirrorChannel, clientChannel, null, targets, false);
 			clientChannel.eventLoop()
 					.execute(new HandlerChangeTask(clientChannel.pipeline(), blockReceiver, DATA_PACKET_SOLVER));
 		}
@@ -350,7 +351,7 @@ public class DNRequestDecoder extends DNObjectDecoder{
                        " from downstream datanode with firstbadlink as " +
                        firstBadLink);
             }
-            prepareToWrite(targetlength);
+            prepareToWrite(targetlength, ctx.channel());
 		}
 
 		@Override

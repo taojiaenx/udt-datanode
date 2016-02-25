@@ -71,7 +71,7 @@ public class DNConf {
 
   final boolean transferToAllowed;
   final boolean dropCacheBehindWrites;
-  final boolean syncBehindWrites;
+  public final boolean syncBehindWrites;
   final boolean syncBehindWritesInBackground;
   final boolean dropCacheBehindReads;
   final boolean syncOnClose;
