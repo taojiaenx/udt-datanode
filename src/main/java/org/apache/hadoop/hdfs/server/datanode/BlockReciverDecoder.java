@@ -2,9 +2,12 @@ package org.apache.hadoop.hdfs.server.datanode;
 
 
 import java.io.BufferedOutputStream;
+import java.io.Closeable;
 import java.io.DataOutputStream;
+import java.io.FileDescriptor;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
 
 import org.apache.commons.logging.Log;
 import org.apache.hadoop.fs.StorageType;
@@ -13,6 +16,7 @@ import org.apache.hadoop.hdfs.protocol.ExtendedBlock;
 import org.apache.hadoop.hdfs.protocol.HdfsConstants;
 import org.apache.hadoop.hdfs.protocol.datatransfer.BlockConstructionStage;
 import org.apache.hadoop.hdfs.protocol.datatransfer.PacketReceiver;
+import org.apache.hadoop.hdfs.server.datanode.fsdataset.ReplicaOutputStreams;
 import org.apache.hadoop.io.IOUtils;
 import org.apache.hadoop.util.DataChecksum;
 
@@ -26,7 +30,7 @@ import io.netty.handler.codec.http.HttpRequest;
  * @author taojiaen
  *
  */
-public class BlockReciverDecoder extends SimpleChannelInboundHandler<PacketReceiver> {
+public class BlockReciverDecoder extends SimpleChannelInboundHandler<PacketReceiver> implements Closeable {
 	public static final Log LOG = DataNode.LOG;
 	private boolean isDatanode;
 	private boolean isClient;
@@ -44,10 +48,23 @@ public class BlockReciverDecoder extends SimpleChannelInboundHandler<PacketRecei
 	private boolean syncBehindWrites;
 	private boolean syncBehindWritesInBackground;
 	private DataChecksum clientChecksum;
-	private Object diskChecksum;
+	private DataChecksum diskChecksum;
 	private boolean needsChecksumTranslation;
-	private Object bytesPerChecksum;
-	private Object checksumSize;
+	private int bytesPerChecksum;
+	private int checksumSize;
+
+	private final DataNode datanode;
+	private ExtendedBlock block;
+	private String clientname;
+	private Channel in;
+	private String inAddr;
+	private String myAddr;
+	private DatanodeInfo srcDataNode;
+	private ReplicaOutputStreams streams;
+	private FileDescriptor outFd;
+	private DataOutputStream checksumOut;
+	private OutputStream out;
+	private boolean syncOnClose;
 
 	public BlockReciverDecoder(final ExtendedBlock block, final StorageType storageType,
 		      final Channel in,
@@ -58,8 +75,16 @@ public class BlockReciverDecoder extends SimpleChannelInboundHandler<PacketRecei
 		      final DataNode datanode, DataChecksum requestedChecksum,
 		      CachingStrategy cachingStrategy,
 		      final boolean allowLazyPersist,
-		      final boolean pinning) {
+		      final boolean pinning) throws IOException {
 		 try{
+			 this.block = block;
+	      this.in = in;
+	      this.inAddr = inAddr;
+	      this.myAddr = myAddr;
+	      this.srcDataNode = srcDataNode;
+	      this.datanode = datanode;
+
+	      this.clientname = clientname;
 		      this.isDatanode = clientname.length() == 0;
 		      this.isClient = !this.isDatanode;
 		      this.restartBudget = datanode.getDnConf().restartReplicaExpiry;
@@ -206,5 +231,74 @@ public class BlockReciverDecoder extends SimpleChannelInboundHandler<PacketRecei
 	      datanode.data.unfinalizeBlock(block);
 	    }
 	  }
+
+
+
+	@Override
+	public void close() throws IOException {
+
+	    IOException ioe = null;
+	    if (syncOnClose && (out != null || checksumOut != null)) {
+	      datanode.metrics.incrFsyncCount();
+	    }
+	    long flushTotalNanos = 0;
+	    boolean measuredFlushTime = false;
+	    // close checksum file
+	    try {
+	      if (checksumOut != null) {
+	        long flushStartNanos = System.nanoTime();
+	        checksumOut.flush();
+	        long flushEndNanos = System.nanoTime();
+	        if (syncOnClose) {
+	          long fsyncStartNanos = flushEndNanos;
+	          streams.syncChecksumOut();
+	          datanode.metrics.addFsyncNanos(System.nanoTime() - fsyncStartNanos);
+	        }
+	        flushTotalNanos += flushEndNanos - flushStartNanos;
+	        measuredFlushTime = true;
+	        checksumOut.close();
+	        checksumOut = null;
+	      }
+	    } catch(IOException e) {
+	      ioe = e;
+	    }
+	    finally {
+	      IOUtils.closeStream(checksumOut);
+	    }
+	    // close block file
+	    try {
+	      if (out != null) {
+	        long flushStartNanos = System.nanoTime();
+	        out.flush();
+	        long flushEndNanos = System.nanoTime();
+	        if (syncOnClose) {
+	          long fsyncStartNanos = flushEndNanos;
+	          streams.syncDataOut();
+	          datanode.metrics.addFsyncNanos(System.nanoTime() - fsyncStartNanos);
+	        }
+	        flushTotalNanos += flushEndNanos - flushStartNanos;
+	        measuredFlushTime = true;
+	        out.close();
+	        out = null;
+	      }
+	    } catch (IOException e) {
+	      ioe = e;
+	    }
+	    finally{
+	      IOUtils.closeStream(out);
+	    }
+	    if (replicaHandler != null) {
+	      IOUtils.cleanup(null, replicaHandler);
+	      replicaHandler = null;
+	    }
+	    if (measuredFlushTime) {
+	      datanode.metrics.addFlushNanos(flushTotalNanos);
+	    }
+	    // disk check
+	    if(ioe != null) {
+	      datanode.checkDiskErrorAsync();
+	      throw ioe;
+	    }
+	}
 }
 

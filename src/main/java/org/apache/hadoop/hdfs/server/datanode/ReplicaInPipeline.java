@@ -30,19 +30,19 @@ import org.apache.hadoop.io.IOUtils;
 import org.apache.hadoop.util.DataChecksum;
 import org.apache.hadoop.util.StringUtils;
 
-/** 
+/**
  * This class defines a replica in a pipeline, which
  * includes a persistent replica being written to by a dfs client or
  * a temporary replica being replicated by a source datanode or
  * being copied for the balancing purpose.
- * 
+ *
  * The base class implements a temporary replica
  */
 public class ReplicaInPipeline extends ReplicaInfo
                         implements ReplicaInPipelineInterface {
   private long bytesAcked;
   private long bytesOnDisk;
-  private byte[] lastChecksum;  
+  private byte[] lastChecksum;
   private Thread writer;
 
   /**
@@ -51,7 +51,7 @@ public class ReplicaInPipeline extends ReplicaInfo
    * the bytes already written to this block.
    */
   private long bytesReserved;
-  
+
   /**
    * Constructor for a zero length replica
    * @param blockId block id
@@ -61,7 +61,7 @@ public class ReplicaInPipeline extends ReplicaInfo
    * @param bytesToReserve disk space to reserve for this replica, based on
    *                       the estimated maximum block length.
    */
-  public ReplicaInPipeline(long blockId, long genStamp, 
+  public ReplicaInPipeline(long blockId, long genStamp,
         FsVolumeSpi vol, File dir, long bytesToReserve) {
     this(blockId, 0L, genStamp, vol, dir, Thread.currentThread(), bytesToReserve);
   }
@@ -73,7 +73,7 @@ public class ReplicaInPipeline extends ReplicaInfo
    * @param dir directory path where block and meta files are located
    * @param writer a thread that is writing to this replica
    */
-  ReplicaInPipeline(Block block, 
+  ReplicaInPipeline(Block block,
       FsVolumeSpi vol, File dir, Thread writer) {
     this( block.getBlockId(), block.getNumBytes(), block.getGenerationStamp(),
         vol, dir, writer, 0L);
@@ -115,17 +115,17 @@ public class ReplicaInPipeline extends ReplicaInfo
   public long getVisibleLength() {
     return -1;
   }
-  
+
   @Override  //ReplicaInfo
   public ReplicaState getState() {
     return ReplicaState.TEMPORARY;
   }
-  
+
   @Override // ReplicaInPipelineInterface
   public long getBytesAcked() {
     return bytesAcked;
   }
-  
+
   @Override // ReplicaInPipelineInterface
   public void setBytesAcked(long bytesAcked) {
     long newBytesAcked = bytesAcked - this.bytesAcked;
@@ -137,7 +137,7 @@ public class ReplicaInPipeline extends ReplicaInfo
     getVolume().releaseReservedSpace(newBytesAcked);
     bytesReserved -= newBytesAcked;
   }
-  
+
   @Override // ReplicaInPipelineInterface
   public long getBytesOnDisk() {
     return bytesOnDisk;
@@ -147,7 +147,7 @@ public class ReplicaInPipeline extends ReplicaInfo
   public long getBytesReserved() {
     return bytesReserved;
   }
-  
+
   @Override
   public void releaseAllBytesReserved() {  // ReplicaInPipelineInterface
     getVolume().releaseReservedSpace(bytesReserved);
@@ -159,7 +159,7 @@ public class ReplicaInPipeline extends ReplicaInfo
     this.bytesOnDisk = dataLength;
     this.lastChecksum = lastChecksum;
   }
-  
+
   @Override // ReplicaInPipelineInterface
   public synchronized ChunkChecksum getLastChecksumAndDataLen() {
     return new ChunkChecksum(getBytesOnDisk(), lastChecksum);
@@ -172,12 +172,12 @@ public class ReplicaInPipeline extends ReplicaInfo
   public void setWriter(Thread writer) {
     this.writer = writer;
   }
-  
+
   @Override  // Object
   public boolean equals(Object o) {
     return super.equals(o);
   }
-  
+
   /**
    * Interrupt the writing thread and wait until it dies
    * @throws IOException the waiting is interrupted
@@ -197,14 +197,15 @@ public class ReplicaInPipeline extends ReplicaInfo
       }
     }
   }
-  
+
   @Override  // Object
   public int hashCode() {
     return super.hashCode();
   }
-  
+
+
   @Override // ReplicaInPipelineInterface
-  public ReplicaOutputStreams createStreams(boolean isCreate, 
+  public ReplicaOutputStreams createStreams(boolean isCreate,
       DataChecksum requestedChecksum) throws IOException {
     File blockFile = getBlockFile();
     File metaFile = getMetaFile();
@@ -216,13 +217,13 @@ public class ReplicaInPipeline extends ReplicaInfo
     }
     long blockDiskSize = 0L;
     long crcDiskSize = 0L;
-    
+
     // the checksum that should actually be used -- this
     // may differ from requestedChecksum for appends.
     final DataChecksum checksum;
-    
+
     RandomAccessFile metaRAF = new RandomAccessFile(metaFile, "rw");
-    
+
     if (!isCreate) {
       // For append or recovery, we must enforce the existing checksum.
       // Also, verify that the file has correct lengths, etc.
@@ -230,21 +231,21 @@ public class ReplicaInPipeline extends ReplicaInfo
       try {
         BlockMetadataHeader header = BlockMetadataHeader.readHeader(metaRAF);
         checksum = header.getChecksum();
-        
+
         if (checksum.getBytesPerChecksum() !=
             requestedChecksum.getBytesPerChecksum()) {
           throw new IOException("Client requested checksum " +
               requestedChecksum + " when appending to an existing block " +
               "with different chunk size: " + checksum);
         }
-        
+
         int bytesPerChunk = checksum.getBytesPerChecksum();
         int checksumSize = checksum.getChecksumSize();
-        
+
         blockDiskSize = bytesOnDisk;
         crcDiskSize = BlockMetadataHeader.getHeaderSize() +
           (blockDiskSize+bytesPerChunk-1)/bytesPerChunk*checksumSize;
-        if (blockDiskSize>0 && 
+        if (blockDiskSize>0 &&
             (blockDiskSize>blockFile.length() || crcDiskSize>metaFile.length())) {
           throw new IOException("Corrupted block: " + this);
         }
@@ -259,7 +260,7 @@ public class ReplicaInPipeline extends ReplicaInfo
       // for create, we can use the requested checksum
       checksum = requestedChecksum;
     }
-    
+
     FileOutputStream blockOut = null;
     FileOutputStream crcOut = null;
     try {
@@ -278,7 +279,7 @@ public class ReplicaInPipeline extends ReplicaInfo
       throw e;
     }
   }
-  
+
   @Override
   public String toString() {
     return super.toString()
