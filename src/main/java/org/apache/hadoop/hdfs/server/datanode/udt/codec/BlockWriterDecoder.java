@@ -48,12 +48,17 @@ public abstract class BlockWriterDecoder extends SimpleChannelInboundHandler<Pac
     }
 
 	@Override
-    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause)
-            throws Exception {
+	public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
 		closeWriter();
-        ctx.fireExceptionCaught(cause);
-    }
+		if (ctx.channel().isActive()) {
+			ctx.fireExceptionCaught(cause);
+		}
+	}
 
+	@Override
+	public void handlerRemoved(ChannelHandlerContext ctx) throws Exception {
+		closeWriter();
+	}
 
 
 	private void closeWriter() {
@@ -193,7 +198,7 @@ class FileWriter {
 	 */
 	private static void  clearBufQueue(Queue<ByteBuf> queue) {
 		ByteBuf buf = null;
-		while(true) {
+		while(queue.size() > 0) {
 			buf = queue.poll();
 			if (buf != null) {
 				ReferenceCountUtil.release(buf);
