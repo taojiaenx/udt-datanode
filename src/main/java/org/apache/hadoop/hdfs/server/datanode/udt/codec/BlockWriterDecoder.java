@@ -19,16 +19,12 @@ import io.netty.util.ReferenceCountUtil;
  *
  */
 public abstract class BlockWriterDecoder extends SimpleChannelInboundHandler<PacketReceiver>{
-	static int DefaultBufferSize = 4096;
 	private final FileWriter dataWriter;
 	private final FileWriter checksumWriter;
 
 	public BlockWriterDecoder(final FileChannel fileChannel, FileChannel checksumChannel) {
-		this(fileChannel, checksumChannel, DefaultBufferSize);
-	}
-	public BlockWriterDecoder(final FileChannel fileChannel, FileChannel checksumChannel, int buffersize) {
-		this.dataWriter = new FileWriter(fileChannel, buffersize);
-		this.checksumWriter = new FileWriter(checksumChannel, buffersize);
+		this.dataWriter = new FileWriter(fileChannel);
+		this.checksumWriter = new FileWriter(checksumChannel);
 	}
 
 
@@ -105,13 +101,10 @@ class FileWriter {
 	private final FileChannel fileChannel;
 	private final Queue<ByteBuf> fileByteQueue = new ArrayDeque<ByteBuf>();
 	private ByteBuf currentByteBuf = null;
-	private final ByteBuffer byteBuffer;
 	private long currentWritelen = 0;
 
-	public FileWriter(FileChannel fileChannel, int buffersize) {
+	public FileWriter(FileChannel fileChannel) {
 		this.fileChannel = fileChannel;
-		this.byteBuffer = ByteBuffer.allocateDirect(buffersize);
-		byteBuffer.clear();
 	}
 
 	void recieveBuf(ByteBuf buf) {
@@ -129,23 +122,27 @@ class FileWriter {
 		currentWritelen = 0;
 		if (!fileChannel.isOpen())
 			return 0;
+		currentByteBuf.readBytes(fileChannel, currentByteBuf.readableBytes());
 		while (true) {
 			// 从nettyBuffer中读入数据
-			if (byteBuffer.hasRemaining()) {
-				readDataFromNetty();
+			if (currentByteBuf == null) {
+				currentByteBuf = fileByteQueue.poll();
 			}
-			byteBuffer.flip();
+
+			if (currentByteBuf == null) {
+				break;
+			}
 
 			// 把数据写入文件
 			currentReadlen = 0;
-			try {
-				if (byteBuffer.hasRemaining()) {
-					currentReadlen = fileChannel.write(byteBuffer);
-				}
-			} catch (Exception e) {
-				throw e;
-			} finally {
-				byteBuffer.compact();
+			if (currentByteBuf.isReadable()) {
+				currentReadlen = currentByteBuf.readBytes(fileChannel, currentByteBuf.readableBytes());
+			}
+
+			//如果buffer已经写完了
+			if (!currentByteBuf.isReadable()) {
+				ReferenceCountUtil.release(currentByteBuf);
+				currentByteBuf = null;
 			}
 			if (currentReadlen <= 0) {
 				break;
@@ -165,8 +162,8 @@ class FileWriter {
 	 * 是否仍旧可以处理数据
 	 */
 	boolean canSolveData() {
-		return fileChannel.isOpen() && currentWritelen > 0 && (byteBuffer.position() > 0
-				|| (currentByteBuf != null && currentByteBuf.isReadable()) || fileByteQueue.size() > 0);
+		return fileChannel.isOpen() && currentWritelen > 0
+				&& ((currentByteBuf != null && currentByteBuf.isReadable()) || fileByteQueue.size() > 0);
 	}
 
 
@@ -181,21 +178,8 @@ class FileWriter {
 		if (currentByteBuf != null) {
 			ReferenceCountUtil.release(currentByteBuf);
 		}
-		byteBuffer.clear();
 	}
 
-	private void readDataFromNetty() {
-		if (currentByteBuf == null) {
-			currentByteBuf = fileByteQueue.poll();
-		}
-		if (currentByteBuf != null && currentByteBuf.isReadable()) {
-			currentByteBuf.readBytes(byteBuffer);
-		}
-		if (currentByteBuf != null && !currentByteBuf.isReadable()) {
-			ReferenceCountUtil.release(currentByteBuf);
-			currentByteBuf = null;
-		}
-	}
 
 	/***
 	 * 清理buffer队列
