@@ -19,14 +19,18 @@ import io.netty.util.ReferenceCountUtil;
  *
  */
 public abstract class BlockWriterDecoder extends SimpleChannelInboundHandler<PacketReceiver>{
-	static int BufferSize = 4096;
+	static int DefaultBufferSize = 4096;
 	private final FileWriter dataWriter;
 	private final FileWriter checksumWriter;
 
 	public BlockWriterDecoder(final FileChannel fileChannel, FileChannel checksumChannel) {
-		this.dataWriter = new FileWriter(fileChannel);
-		this.checksumWriter = new FileWriter(checksumChannel);
+		this(fileChannel, checksumChannel, DefaultBufferSize);
 	}
+	public BlockWriterDecoder(final FileChannel fileChannel, FileChannel checksumChannel, int buffersize) {
+		this.dataWriter = new FileWriter(fileChannel, buffersize);
+		this.checksumWriter = new FileWriter(checksumChannel, buffersize);
+	}
+
 
 
 	@Override
@@ -101,11 +105,12 @@ class FileWriter {
 	private final FileChannel fileChannel;
 	private final Queue<ByteBuf> fileByteQueue = new ArrayDeque<ByteBuf>();
 	private ByteBuf currentByteBuf = null;
-	private final ByteBuffer byteBuffer = ByteBuffer.allocateDirect(BlockWriterDecoder.BufferSize);
+	private final ByteBuffer byteBuffer;
 	private long currentWritelen = 0;
 
-	public FileWriter(FileChannel fileChannel) {
+	public FileWriter(FileChannel fileChannel, int buffersize) {
 		this.fileChannel = fileChannel;
+		this.byteBuffer = ByteBuffer.allocateDirect(buffersize);
 		byteBuffer.clear();
 	}
 
