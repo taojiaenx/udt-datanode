@@ -18,13 +18,13 @@ import io.netty.util.ReferenceCountUtil;
  * @author taojiaen
  *
  */
-public abstract class BlockWriterDecoder extends SimpleChannelInboundHandler<PacketReceiver>{
-	private final FileWriter dataWriter;
-	private final FileWriter checksumWriter;
+public abstract class FileUploadDecoder extends SimpleChannelInboundHandler<PacketReceiver>{
+	private final packetBufferReader dataWriter;
+	private final packetBufferReader checksumWriter;
 
-	public BlockWriterDecoder(final FileChannel fileChannel, FileChannel checksumChannel) {
-		this.dataWriter = new FileWriter(fileChannel);
-		this.checksumWriter = new FileWriter(checksumChannel);
+	public FileUploadDecoder(final FileChannel fileChannel, FileChannel checksumChannel) {
+		this.dataWriter = new packetBufferReader(fileChannel);
+		this.checksumWriter = new packetBufferReader(checksumChannel);
 	}
 
 
@@ -99,13 +99,18 @@ public abstract class BlockWriterDecoder extends SimpleChannelInboundHandler<Pac
 
 }
 
-class FileWriter {
+/**
+ * 把packet传入文件中
+ * @author taojiaen
+ *
+ */
+class packetBufferReader {
 	private final FileChannel fileChannel;
 	private final Queue<ByteBuf> fileByteQueue = new ArrayDeque<ByteBuf>();
 	private ByteBuf currentByteBuf = null;
 	private long currentWritelen = 0;
 
-	public FileWriter(FileChannel fileChannel) {
+	public packetBufferReader(FileChannel fileChannel) {
 		this.fileChannel = fileChannel;
 	}
 
