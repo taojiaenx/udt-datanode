@@ -248,7 +248,7 @@ public class DNRequestDecoder extends DNObjectDecoder{
 	private void addBlockDecoder(final Channel mirrorChannel) {
 		if (blockReceiver != null) {
 			//接收具体数据
-	        blockReceiver.receiveBlock(mirrorChannel, clientChannel, null, targets, false);
+	      //  blockReceiver.receiveBlock(mirrorChannel, clientChannel, null, targets, false);
 			clientChannel.eventLoop()
 					.execute(new HandlerChangeTask(clientChannel.pipeline(), blockReceiver, DATA_PACKET_SOLVER));
 		}
