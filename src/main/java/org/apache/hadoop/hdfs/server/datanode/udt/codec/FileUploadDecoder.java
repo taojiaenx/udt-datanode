@@ -129,7 +129,6 @@ class packetBufferReader {
 		currentWritelen = 0;
 		if (!fileChannel.isOpen())
 			return 0;
-		currentByteBuf.readBytes(fileChannel, currentByteBuf.readableBytes());
 		while (true) {
 			// 从nettyBuffer中读入数据
 			if (currentByteBuf == null) {
