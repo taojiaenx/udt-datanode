@@ -596,6 +596,7 @@ class BlockReceiver implements Closeable {
       final boolean shouldNotWriteChecksum = checksumReceivedLen == 0
           && streams.isTransientStorage();
       try {
+    	  //当前磁盘上的数据长度
         long onDiskLen = replicaInfo.getBytesOnDisk();
         if (onDiskLen<offsetInBlock) {
           // Normally the beginning of an incoming packet is aligned with the
@@ -608,12 +609,13 @@ class BlockReceiver implements Closeable {
           // bytes should be skipped when writing the data and checksum
           // buffers out to disk.
         	/**
-        	 * 一般来说，每个数据包存到磁盘是，他的起始字节都是对其的(能不快大小整除)
-        	 * 但如果不对其，多余的字节会被放置到下一个chunk中。
-        	 * 为了防止正确数据被重复发送，这里会记录磁盘中 的数据
+        	 * 一般来说，每个数据包存到磁盘是，他的起始字节都是对齐的(能不快大小整除)
+        	 * 但如果不对其，则先在当前的缓存区中取出一部分与之前的数据拼接成新的crc校验串，然后调整校验文件。
         	 */
           long partialChunkSizeOnDisk = onDiskLen % bytesPerChecksum;
+          //是否是对齐 的
           boolean alignedOnDisk = partialChunkSizeOnDisk == 0;
+          //是否是一个完整长度的数据包
           boolean alignedInPacket = firstByteInBlock % bytesPerChecksum == 0;
 
           // Since data is always appended, not overwritten, partial CRC
@@ -647,6 +649,7 @@ class BlockReceiver implements Closeable {
                   + ": previous write did not end at the chunk boundary."
                   + " onDiskLen=" + onDiskLen);
             }
+            //计算该残块的偏移量
             long offsetInChecksum = BlockMetadataHeader.getHeaderSize() +
                 onDiskLen / bytesPerChecksum * checksumSize;
             partialCrc = computePartialChunkCrc(onDiskLen, offsetInChecksum);
@@ -692,6 +695,7 @@ class BlockReceiver implements Closeable {
                   checksumSize);
               crcBytes = copyLastChunkChecksum(buf, checksumSize, buf.length);
               // prepare to overwrite last checksum
+              //补完比对齐的crc校验
               adjustCrcFilePosition();
               checksumOut.write(buf);
               if(LOG.isDebugEnabled()) {
