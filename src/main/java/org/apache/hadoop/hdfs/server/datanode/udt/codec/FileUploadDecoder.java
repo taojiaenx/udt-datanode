@@ -154,14 +154,17 @@ class packetBufferReader {
 			if (currentReadlen <= 0) {
 				break;
 			} else {
-				/**
-				 * 强制刷入磁盘
-				 */
-				fileChannel.force(true);
 				readlen += currentReadlen;
 			}
 		}
 		currentWritelen = readlen;
+
+		if (currentWritelen > 0) {
+			/**
+			 * 强制刷入磁盘
+			 */
+			fileChannel.force(true);
+		}
 		return readlen;
 	}
 
