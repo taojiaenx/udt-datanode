@@ -41,6 +41,7 @@ public abstract class BlockWriterDecoder extends SimpleChannelInboundHandler<Pac
 	protected abstract void dataSuccess(long len);
 	protected abstract void checksumfileSuccess(long len);
 	protected abstract boolean isEndofWrite();
+	protected abstract void inputFinished();
 	@Override
     public void channelInactive(ChannelHandlerContext ctx) throws Exception {
 		closeWriter();
@@ -74,6 +75,7 @@ public abstract class BlockWriterDecoder extends SimpleChannelInboundHandler<Pac
 		long checksumsize = checksumWriter.flushFileQueue(ctx);
 		checksumfileSuccess(checksumsize);
 		if (isEndofWrite()) {
+			inputFinished();
 			closeWriter();
 		} else if (dataWriter.canSolveData() || checksumWriter.canSolveData()) {
 			ctx.executor().execute(new Runnable() {
