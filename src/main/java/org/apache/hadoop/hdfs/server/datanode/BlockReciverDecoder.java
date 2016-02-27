@@ -8,6 +8,7 @@ import java.io.FileDescriptor;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.util.Queue;
 
 import org.apache.commons.logging.Log;
 import org.apache.hadoop.fs.StorageType;
@@ -17,9 +18,11 @@ import org.apache.hadoop.hdfs.protocol.HdfsConstants;
 import org.apache.hadoop.hdfs.protocol.datatransfer.BlockConstructionStage;
 import org.apache.hadoop.hdfs.protocol.datatransfer.PacketReceiver;
 import org.apache.hadoop.hdfs.server.datanode.fsdataset.ReplicaOutputStreams;
+import org.apache.hadoop.hdfs.server.datanode.udt.codec.FileUploadDecoder;
 import org.apache.hadoop.io.IOUtils;
 import org.apache.hadoop.util.DataChecksum;
 
+import io.netty.buffer.ByteBuf;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
@@ -30,7 +33,7 @@ import io.netty.handler.codec.http.HttpRequest;
  * @author taojiaen
  *
  */
-public class BlockReciverDecoder extends SimpleChannelInboundHandler<PacketReceiver> implements Closeable {
+public class BlockReciverDecoder extends FileUploadDecoder implements Closeable {
 	public static final Log LOG = DataNode.LOG;
 	private boolean isDatanode;
 	private boolean isClient;
@@ -76,6 +79,7 @@ public class BlockReciverDecoder extends SimpleChannelInboundHandler<PacketRecei
 		      CachingStrategy cachingStrategy,
 		      final boolean allowLazyPersist,
 		      final boolean pinning) throws IOException {
+		super();
 		 try{
 			 this.block = block;
 	      this.in = in;
@@ -167,6 +171,7 @@ public class BlockReciverDecoder extends SimpleChannelInboundHandler<PacketRecei
 		      this.out = streams.getDataOut();
 		      if (out instanceof FileOutputStream) {
 		        this.outFd = ((FileOutputStream)out).getFD();
+		        this.setDataReader(((FileOutputStream)out).getChannel());
 		      } else {
 		        LOG.warn("Could not get file descriptor for outputstream of class " +
 		            out.getClass());
@@ -216,11 +221,6 @@ public class BlockReciverDecoder extends SimpleChannelInboundHandler<PacketRecei
 			// TODO Auto-generated method stub
 
 		}
-
-	}
-	@Override
-	protected void channelRead0(ChannelHandlerContext ctx, PacketReceiver msg) throws Exception {
-		// TODO Auto-generated method stub
 
 	}
 	/** Cleanup a partial block
@@ -299,6 +299,31 @@ public class BlockReciverDecoder extends SimpleChannelInboundHandler<PacketRecei
 	      datanode.checkDiskErrorAsync();
 	      throw ioe;
 	    }
+	}
+
+
+
+	@Override
+	protected void parsePacketRecived(ChannelHandlerContext ctx, PacketReceiver msg, Queue<ByteBuf> data,
+			Queue<ByteBuf> checksum) {
+		// TODO Auto-generated method stub
+
+	}
+
+
+
+	@Override
+	protected void dataSuccess(long len) {
+		// TODO Auto-generated method stub
+
+	}
+
+
+
+	@Override
+	protected void checksumfileSuccess(long len) {
+		// TODO Auto-generated method stub
+
 	}
 }
 

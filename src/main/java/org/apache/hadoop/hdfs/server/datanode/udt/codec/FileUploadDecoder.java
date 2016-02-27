@@ -15,42 +15,62 @@ import io.netty.util.ReferenceCountUtil;
 
 /**
  * 用于处理文件上传的handler
+ *
  * @author taojiaen
  *
  */
-public abstract class FileUploadDecoder extends SimpleChannelInboundHandler<PacketReceiver>{
-	private final packetBufferReader dataWriter;
-	private final packetBufferReader checksumWriter;
+public abstract class FileUploadDecoder extends SimpleChannelInboundHandler<PacketReceiver> {
+	private  packetBufferReader dataReader;
+	private  packetBufferReader checksumReader;
 
-	public FileUploadDecoder(final FileChannel fileChannel, FileChannel checksumChannel) {
-		this.dataWriter = new packetBufferReader(fileChannel);
-		this.checksumWriter = new packetBufferReader(checksumChannel);
+	public FileUploadDecoder() {
+
 	}
-
-
+	public FileUploadDecoder(final FileChannel fileChannel, FileChannel checksumChannel) {
+		this.dataReader = new packetBufferReader(fileChannel);
+		this.checksumReader = new packetBufferReader(checksumChannel);
+	}
 
 	@Override
 	protected void channelRead0(ChannelHandlerContext ctx, PacketReceiver msg) throws Exception {
-		dataWriter.recieveBuf(getfileBuf(msg));
-		checksumWriter.recieveBuf(getchecksumBuf(msg));
+		parsePacketRecived(ctx, msg, dataReader.fileByteQueue, checksumReader.fileByteQueue);
 		doflush(ctx);
 	}
 
-	protected abstract ByteBuf getfileBuf(PacketReceiver msg);
-	protected abstract ByteBuf getchecksumBuf(PacketReceiver msg);
+	protected abstract void parsePacketRecived(ChannelHandlerContext ctx, PacketReceiver msg, Queue<ByteBuf> data,
+			Queue<ByteBuf> checksum);
+
 	protected abstract void dataSuccess(long len);
+
 	protected abstract void checksumfileSuccess(long len);
-	protected abstract boolean isEndofWrite();
-	protected abstract void inputFinished();
+
+
+	/**
+	 * 手动调用写入结束处理
+	 */
+	protected void finishRead() {
+		closeReader();
+	};
+
+	/**
+	 * 同步文件,强制写入到磁盘
+	 *
+	 * @throws IOException
+	 */
+	protected void syncFile() throws IOException {
+		dataReader.fileChannel.force(true);
+		checksumReader.fileChannel.force(true);
+	}
+
 	@Override
-    public void channelInactive(ChannelHandlerContext ctx) throws Exception {
-		closeWriter();
-        ctx.fireChannelInactive();
-    }
+	public void channelInactive(ChannelHandlerContext ctx) throws Exception {
+		closeReader();
+		ctx.fireChannelInactive();
+	}
 
 	@Override
 	public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
-		closeWriter();
+		closeReader();
 		if (ctx.channel().isActive()) {
 			ctx.fireExceptionCaught(cause);
 		}
@@ -58,26 +78,32 @@ public abstract class FileUploadDecoder extends SimpleChannelInboundHandler<Pack
 
 	@Override
 	public void handlerRemoved(ChannelHandlerContext ctx) throws Exception {
-		closeWriter();
+		closeReader();
 	}
 
-
-	private void closeWriter() {
-		dataWriter.closeAll();
-		checksumWriter.closeAll();
+	private void closeReader() {
+		dataReader.closeAll();
+		checksumReader.closeAll();
 	}
 
-
-
+	protected void setDataReader(FileChannel channel) {
+		this.dataReader = new packetBufferReader(channel);
+	}
+	protected void setChecksumReader(FileChannel channel) {
+		this.checksumReader = new packetBufferReader(channel);
+	}
+	/**
+	 * 把数据写入到文件中
+	 *
+	 * @param ctx
+	 * @throws IOException
+	 */
 	private void doflush(final ChannelHandlerContext ctx) throws IOException {
-		long fileSize = dataWriter.flushFileQueue(ctx);
+		long fileSize = dataReader.flushFileQueue(ctx);
 		dataSuccess(fileSize);
-		long checksumsize = checksumWriter.flushFileQueue(ctx);
+		long checksumsize = checksumReader.flushFileQueue(ctx);
 		checksumfileSuccess(checksumsize);
-		if (isEndofWrite()) {
-			inputFinished();
-			closeWriter();
-		} else if (dataWriter.canSolveData() || checksumWriter.canSolveData()) {
+		if (dataReader.canSolveData() || checksumReader.canSolveData()) {
 			ctx.executor().execute(new Runnable() {
 
 				@Override
@@ -101,12 +127,13 @@ public abstract class FileUploadDecoder extends SimpleChannelInboundHandler<Pack
 
 /**
  * 把packet传入文件中
+ *
  * @author taojiaen
  *
  */
 class packetBufferReader {
-	private final FileChannel fileChannel;
-	private final Queue<ByteBuf> fileByteQueue = new ArrayDeque<ByteBuf>();
+	final FileChannel fileChannel;
+	final Queue<ByteBuf> fileByteQueue = new ArrayDeque<ByteBuf>();
 	private ByteBuf currentByteBuf = null;
 	private long currentWritelen = 0;
 
@@ -117,8 +144,10 @@ class packetBufferReader {
 	void recieveBuf(ByteBuf buf) {
 		fileByteQueue.add(buf);
 	}
+
 	/**
 	 * 把数据写入到文件中
+	 *
 	 * @param ctx
 	 * @return
 	 * @throws IOException
@@ -145,7 +174,7 @@ class packetBufferReader {
 				currentReadlen = currentByteBuf.readBytes(fileChannel, currentByteBuf.readableBytes());
 			}
 
-			//如果buffer已经写完了
+			// 如果buffer已经写完了
 			if (!currentByteBuf.isReadable()) {
 				ReferenceCountUtil.release(currentByteBuf);
 				currentByteBuf = null;
@@ -158,12 +187,6 @@ class packetBufferReader {
 		}
 		currentWritelen = readlen;
 
-		if (currentWritelen > 0) {
-			/**
-			 * 强制刷入磁盘
-			 */
-			fileChannel.force(true);
-		}
 		return readlen;
 	}
 
@@ -174,7 +197,6 @@ class packetBufferReader {
 		return fileChannel.isOpen() && currentWritelen > 0
 				&& ((currentByteBuf != null && currentByteBuf.isReadable()) || fileByteQueue.size() > 0);
 	}
-
 
 	void closeAll() {
 		try {
@@ -189,14 +211,14 @@ class packetBufferReader {
 		}
 	}
 
-
 	/***
 	 * 清理buffer队列
+	 *
 	 * @param queue
 	 */
-	private static void  clearBufQueue(Queue<ByteBuf> queue) {
+	private static void clearBufQueue(Queue<ByteBuf> queue) {
 		ByteBuf buf = null;
-		while(queue.size() > 0) {
+		while (queue.size() > 0) {
 			buf = queue.poll();
 			if (buf != null) {
 				ReferenceCountUtil.release(buf);
