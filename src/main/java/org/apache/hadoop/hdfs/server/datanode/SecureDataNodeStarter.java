@@ -5,9 +5,9 @@
  * licenses this file to you under the Apache License, Version 2.0 (the
  * "License"); you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
  * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
@@ -16,6 +16,7 @@
  */
 package org.apache.hadoop.hdfs.server.datanode;
 
+import com.barchart.udt.nio.ServerSocketChannelUDT;
 import com.google.common.annotations.VisibleForTesting;
 import org.apache.commons.daemon.Daemon;
 import org.apache.commons.daemon.DaemonContext;
@@ -33,7 +34,7 @@ import java.net.ServerSocket;
 import java.nio.channels.ServerSocketChannel;
 
 /**
- * Utility class to start a datanode in a secure cluster, first obtaining 
+ * Utility class to start a datanode in a secure cluster, first obtaining
  * privileged resources before main startup and handing them to the datanode.
  */
 public class SecureDataNodeStarter implements Daemon {
@@ -54,7 +55,7 @@ public class SecureDataNodeStarter implements Daemon {
       return httpServerSocket;
     }
   }
-  
+
   private String [] args;
   private SecureResources resources;
 
@@ -64,7 +65,7 @@ public class SecureDataNodeStarter implements Daemon {
     // Create a new HdfsConfiguration object to ensure that the configuration in
     // hdfs-site.xml is picked up.
     Configuration conf = new HdfsConfiguration();
-    
+
     // Stash command-line arguments for regular datanode
     args = context.getArguments();
     resources = getSecureResources(conf);
@@ -96,8 +97,12 @@ public class SecureDataNodeStarter implements Daemon {
         DFSConfigKeys.DFS_DATANODE_SOCKET_WRITE_TIMEOUT_KEY,
         HdfsServerConstants.WRITE_TIMEOUT);
 
-    ServerSocket ss = (socketWriteTimeout > 0) ? 
-        ServerSocketChannel.open().socket() : new ServerSocket();
+    ServerSocket ss;
+		if (false == conf.getBoolean(DFSConfigKeys.DFS_CLIENT_USE_UDT, DFSConfigKeys.DFS_CLIENT_USE_UDT_DEFAULT)) {
+			ss = (socketWriteTimeout > 0) ? ServerSocketChannel.open().socket() : new ServerSocket();
+		} else {
+			ss = ServerSocketChannelUDT.open().socket();
+		}
     ss.bind(streamingAddr, 0);
 
     // Check that we got the port we need

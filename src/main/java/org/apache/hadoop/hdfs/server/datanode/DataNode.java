@@ -891,7 +891,7 @@ public class DataNode extends ReconfigurableBase
   private void initDataXceiver(Configuration conf) throws IOException {
     // find free port or use privileged port provided
     PeerServer peerserver;
-		if (false == conf.getBoolean("datanode.transfer.udt", false)) {
+		if (false == conf.getBoolean(DFSConfigKeys.DFS_CLIENT_USE_UDT, DFSConfigKeys.DFS_CLIENT_USE_UDT_DEFAULT)) {
 			if (secureResources != null) {
 				peerserver = new TcpPeerServer(secureResources);
 			} else {
