@@ -27,8 +27,8 @@ import com.barchart.udt.nio.ServerSocketChannelUDT;
  * @author taojiaen
  *
  */
-public class UdtPeerSever implements PeerServer{
-	static final Log LOG = LogFactory.getLog(UdtPeerSever.class);
+public class UdtPeerServer implements PeerServer{
+	static final Log LOG = LogFactory.getLog(UdtPeerServer.class);
 	private final ServerSocket serverSocket;
 	/**
 	   * Create a non-secure UdtPeerServer.
@@ -37,7 +37,7 @@ public class UdtPeerSever implements PeerServer{
 	   * @param bindAddr              The address to bind to.
 	   * @throws IOException
 	   */
-	  public UdtPeerSever(int socketWriteTimeout,
+	  public UdtPeerServer(int socketWriteTimeout,
 	        InetSocketAddress bindAddr) throws IOException {
 	    this.serverSocket =
 	    		ServerSocketChannelUDT.open().socket();
@@ -48,7 +48,7 @@ public class UdtPeerSever implements PeerServer{
 	   *
 	   * @param secureResources   Security resources.
 	   */
-	  public UdtPeerSever(SecureResources secureResources) {
+	  public UdtPeerServer(SecureResources secureResources) {
 	    this.serverSocket = secureResources.getStreamingSocket();
 	  }
 	  public static Peer peerFromSocketAndKey(

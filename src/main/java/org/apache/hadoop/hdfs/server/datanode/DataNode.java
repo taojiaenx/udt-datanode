@@ -113,7 +113,9 @@ import org.apache.hadoop.hdfs.DFSUtil.ConfiguredNNAddress;
 import org.apache.hadoop.hdfs.HDFSPolicyProvider;
 import org.apache.hadoop.hdfs.HdfsConfiguration;
 import org.apache.hadoop.hdfs.net.DomainPeerServer;
+import org.apache.hadoop.hdfs.net.PeerServer;
 import org.apache.hadoop.hdfs.net.TcpPeerServer;
+import org.apache.hadoop.hdfs.net.UdtPeerServer;
 import org.apache.hadoop.hdfs.protocol.Block;
 import org.apache.hadoop.hdfs.protocol.BlockLocalPathInfo;
 import org.apache.hadoop.hdfs.protocol.ClientDatanodeProtocol;
@@ -888,18 +890,29 @@ public class DataNode extends ReconfigurableBase
 
   private void initDataXceiver(Configuration conf) throws IOException {
     // find free port or use privileged port provided
-    TcpPeerServer tcpPeerServer;
-    if (secureResources != null) {
-      tcpPeerServer = new TcpPeerServer(secureResources);
-    } else {
-      tcpPeerServer = new TcpPeerServer(dnConf.socketWriteTimeout,
-          DataNode.getStreamingAddr(conf));
-    }
-    tcpPeerServer.setReceiveBufferSize(HdfsConstants.DEFAULT_DATA_SOCKET_SIZE);
-    streamingAddr = tcpPeerServer.getStreamingAddr();
+    PeerServer peerserver;
+		if (false == conf.getBoolean("datanode.transfer.udt", false)) {
+			if (secureResources != null) {
+				peerserver = new TcpPeerServer(secureResources);
+			} else {
+				peerserver = new TcpPeerServer(dnConf.socketWriteTimeout, DataNode.getStreamingAddr(conf));
+			}
+		} else {
+			if (secureResources != null) {
+				peerserver = new UdtPeerServer(secureResources);
+			} else {
+				peerserver = new UdtPeerServer(dnConf.socketWriteTimeout, DataNode.getStreamingAddr(conf));
+			}
+		}
+    peerserver.setReceiveBufferSize(HdfsConstants.DEFAULT_DATA_SOCKET_SIZE);
+		if (peerserver instanceof TcpPeerServer) {
+			streamingAddr = ((TcpPeerServer) peerserver).getStreamingAddr();
+		} else if (peerserver instanceof UdtPeerServer) {
+			streamingAddr = ((UdtPeerServer) peerserver).getStreamingAddr();
+		}
     LOG.info("Opened streaming server at " + streamingAddr);
     this.threadGroup = new ThreadGroup("dataXceiverServer");
-    xserver = new DataXceiverServer(tcpPeerServer, conf, this);
+    xserver = new DataXceiverServer(peerserver, conf, this);
   //  this.udtxserver = new UDTDataXceiverServer(tcpPeerServer, conf, this, threadGroup);
     this.dataXceiverServer = new Daemon(threadGroup, xserver);
    // this.udtDataXceiverServer = new Daemon(threadGroup, udtxserver);
