@@ -17,6 +17,8 @@
  */
 package org.apache.hadoop.hdfs;
 
+import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_CLIENT_USE_UDT;
+import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_CLIENT_USE_UDT_DEFAULT;
 import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.HADOOP_SECURITY_CRYPTO_CODEC_CLASSES_KEY_PREFIX;
 import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_BLOCK_SIZE_DEFAULT;
 import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_BLOCK_SIZE_KEY;
@@ -339,6 +341,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
     final int shortCircuitStreamsCacheSize;
     final long shortCircuitStreamsCacheExpiryMs;
     final int shortCircuitSharedMemoryWatcherInterruptCheckMs;
+    final boolean useUdt;
 
     final boolean shortCircuitMmapEnabled;
     final int shortCircuitMmapCacheSize;
@@ -365,6 +368,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
       failoverSleepMaxMillis = conf.getInt(
           DFS_CLIENT_FAILOVER_SLEEPTIME_MAX_KEY,
           DFS_CLIENT_FAILOVER_SLEEPTIME_MAX_DEFAULT);
+      useUdt = conf.getBoolean(DFS_CLIENT_USE_UDT, DFS_CLIENT_USE_UDT_DEFAULT);
 
       maxBlockAcquireFailures = conf.getInt(
           DFS_CLIENT_MAX_BLOCK_ACQUIRE_FAILURES_KEY,

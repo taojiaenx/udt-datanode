@@ -64,7 +64,7 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 
 
-/** 
+/**
  * Utility class to create BlockReader implementations.
  */
 @InterfaceAudience.Private
@@ -119,7 +119,7 @@ public class BlockReaderFactory implements ShortCircuitReplicaCreator {
   /**
    * The name of this client.
    */
-  private String clientName; 
+  private String clientName;
 
   /**
    * The DataNode we're talking to.
@@ -291,7 +291,7 @@ public class BlockReaderFactory implements ShortCircuitReplicaCreator {
    * There are a few caches that are important here.
    *
    * The ShortCircuitCache stores file descriptor objects which have been passed
-   * from the DataNode. 
+   * from the DataNode.
    *
    * The DomainSocketFactory stores information about UNIX domain socket paths
    * that we not been able to use in the past, so that we don't waste time
@@ -348,6 +348,12 @@ public class BlockReaderFactory implements ShortCircuitReplicaCreator {
         }
         return reader;
       }
+    }
+
+    if (conf.useUdt) {
+    	LOG.debug("使用udtkehduan");
+    	return this.getRemoteBlockReaderFromUdt();
+
     }
     Preconditions.checkState(!DFSInputStream.tcpReadsDisabledForTesting,
         "TCP reads were disabled for testing, but we failed to " +
@@ -505,7 +511,7 @@ public class BlockReaderFactory implements ShortCircuitReplicaCreator {
           // Handle an I/O error we got when using a newly created socket.
           // We temporarily disable the domain socket path for a few minutes in
           // this case, to prevent wasting more time on it.
-          LOG.warn(this + ": I/O error requesting file descriptors.  " + 
+          LOG.warn(this + ": I/O error requesting file descriptors.  " +
               "Disabling domain socket " + peer.getDomainSocket(), e);
           IOUtils.cleanup(LOG, peer);
           clientContext.getDomainSocketFactory()
@@ -521,11 +527,11 @@ public class BlockReaderFactory implements ShortCircuitReplicaCreator {
    * Request file descriptors from a DomainPeer.
    *
    * @param peer   The peer to use for communication.
-   * @param slot   If non-null, the shared memory slot to associate with the 
+   * @param slot   If non-null, the shared memory slot to associate with the
    *               new ShortCircuitReplica.
-   * 
+   *
    * @return  A ShortCircuitReplica object if we could communicate with the
-   *          datanode; null, otherwise. 
+   *          datanode; null, otherwise.
    * @throws  IOException If we encountered an I/O exception while communicating
    *          with the datanode.
    */
@@ -668,6 +674,49 @@ public class BlockReaderFactory implements ShortCircuitReplicaCreator {
     return null;
   }
 
+  private BlockReader getRemoteBlockReaderFromUdt() throws IOException {
+	    if (LOG.isTraceEnabled()) {
+	      LOG.trace(this + ": trying to create a remote block reader from a " +
+	          "TCP socket");
+	    }
+	    BlockReader blockReader = null;
+	    while (true) {
+	      BlockReaderPeer curPeer = null;
+	      Peer peer = null;
+	      try {
+	        curPeer = nextUdtPeer();
+	        if (curPeer.fromCache) remainingCacheTries--;
+	        peer = curPeer.peer;
+	        blockReader = getRemoteBlockReader(peer);
+	        return blockReader;
+	      } catch (IOException ioe) {
+	        if (isSecurityException(ioe)) {
+	          if (LOG.isTraceEnabled()) {
+	            LOG.trace(this + ": got security exception while constructing " +
+	                "a remote block reader from " + peer, ioe);
+	          }
+	          throw ioe;
+	        }
+	        if ((curPeer != null) && curPeer.fromCache) {
+	          // Handle an I/O error we got when using a cached peer.  These are
+	          // considered less serious, because the underlying socket may be
+	          // stale.
+	          if (LOG.isDebugEnabled()) {
+	            LOG.debug("Closed potentially stale remote peer " + peer, ioe);
+	          }
+	        } else {
+	          // Handle an I/O error we got when using a newly created peer.
+	          LOG.warn("I/O error constructing remote block reader.", ioe);
+	          throw ioe;
+	        }
+	      } finally {
+	        if (blockReader == null) {
+	          IOUtils.cleanup(LOG, peer);
+	        }
+	      }
+	    }
+	  }
+
   /**
    * Get a RemoteBlockReader that communicates over a TCP socket.
    *
@@ -727,7 +776,7 @@ public class BlockReaderFactory implements ShortCircuitReplicaCreator {
   public static class BlockReaderPeer {
     final Peer peer;
     final boolean fromCache;
-    
+
     BlockReaderPeer(Peer peer, boolean fromCache) {
       this.peer = peer;
       this.fromCache = fromCache;
@@ -788,6 +837,31 @@ public class BlockReaderFactory implements ShortCircuitReplicaCreator {
       throw e;
     }
   }
+  private BlockReaderPeer nextUdtPeer() throws IOException {
+	    if (remainingCacheTries > 0) {
+	      Peer peer = clientContext.getPeerCache().get(datanode, false);
+	      if (peer != null) {
+	        if (LOG.isTraceEnabled()) {
+	          LOG.trace("nextTcpPeer: reusing existing peer " + peer);
+	        }
+	        return new BlockReaderPeer(peer, true);
+	      }
+	    }
+	    try {
+	      Peer peer = ((DFSClient)remotePeerFactory).newUdtConnectedPeer(inetSocketAddress, token,
+	        datanode);
+	      if (LOG.isTraceEnabled()) {
+	        LOG.trace("nextTcpPeer: created newConnectedPeer " + peer);
+	      }
+	      return new BlockReaderPeer(peer, false);
+	    } catch (IOException e) {
+	      if (LOG.isTraceEnabled()) {
+	        LOG.trace("nextTcpPeer: failed to create newConnectedPeer " +
+	                  "connected to " + datanode);
+	      }
+	      throw e;
+	    }
+	  }
 
   /**
    * Determine if an exception is security-related.
