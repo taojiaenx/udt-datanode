@@ -16,6 +16,7 @@
  */
 package org.apache.hadoop.hdfs.server.datanode;
 
+import com.barchart.udt.net.NetServerSocketUDT;
 import com.barchart.udt.nio.ServerSocketChannelUDT;
 import com.google.common.annotations.VisibleForTesting;
 import org.apache.commons.daemon.Daemon;
@@ -101,7 +102,7 @@ public class SecureDataNodeStarter implements Daemon {
 		if (false == conf.getBoolean(DFSConfigKeys.DFS_CLIENT_USE_UDT, DFSConfigKeys.DFS_CLIENT_USE_UDT_DEFAULT)) {
 			ss = (socketWriteTimeout > 0) ? ServerSocketChannel.open().socket() : new ServerSocket();
 		} else {
-			ss = ServerSocketChannelUDT.open().socket();
+			ss = (socketWriteTimeout > 0) ? ServerSocketChannelUDT.open().socket() : new NetServerSocketUDT();
 		}
     ss.bind(streamingAddr, 0);
 

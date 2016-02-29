@@ -19,6 +19,7 @@ import org.apache.hadoop.io.IOUtils;
 import org.apache.hadoop.ipc.Server;
 import org.apache.hadoop.security.token.Token;
 
+import com.barchart.udt.net.NetServerSocketUDT;
 import com.barchart.udt.nio.NioServerSocketUDT;
 import com.barchart.udt.nio.ServerSocketChannelUDT;
 
@@ -39,8 +40,8 @@ public class UdtPeerServer implements PeerServer{
 	   */
 	  public UdtPeerServer(int socketWriteTimeout,
 	        InetSocketAddress bindAddr) throws IOException {
-	    this.serverSocket =
-	    		ServerSocketChannelUDT.open().socket();
+	    this.serverSocket = socketWriteTimeout > 0 ?
+	    		ServerSocketChannelUDT.open().socket() : new NetServerSocketUDT();
 	    Server.bind(serverSocket, bindAddr, 0);
 	  }
 	/**
