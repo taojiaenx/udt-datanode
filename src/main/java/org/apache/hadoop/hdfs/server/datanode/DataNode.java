@@ -898,6 +898,7 @@ public class DataNode extends ReconfigurableBase
 				peerserver = new TcpPeerServer(dnConf.socketWriteTimeout, DataNode.getStreamingAddr(conf));
 			}
 		} else {
+			LOG.info("启动udt datanode");
 			if (secureResources != null) {
 				peerserver = new UdtPeerServer(secureResources);
 			} else {

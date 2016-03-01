@@ -229,6 +229,7 @@ import org.apache.htrace.Trace;
 import org.apache.htrace.TraceScope;
 
 import com.barchart.udt.net.NetSocketUDT;
+import com.barchart.udt.nio.SelectorProviderUDT;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
@@ -3467,7 +3468,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
 	    boolean success = false;
 	    Socket sock = null;
 	    try {
-	      sock = new NetSocketUDT();
+	      sock = SelectorProviderUDT.STREAM.openSocketChannel().socket();
 	      NetUtils.connect(sock, addr,
 	        getRandomLocalInterfaceAddr(),
 	        dfsClientConf.socketTimeout);
