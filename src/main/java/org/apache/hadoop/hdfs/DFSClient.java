@@ -77,6 +77,8 @@ import java.net.Socket;
 import java.net.SocketAddress;
 import java.net.URI;
 import java.net.UnknownHostException;
+import java.nio.channels.Channel;
+import java.nio.channels.SelectableChannel;
 import java.nio.charset.Charset;
 import java.security.GeneralSecurityException;
 import java.util.ArrayList;
@@ -230,6 +232,7 @@ import org.apache.htrace.TraceScope;
 
 import com.barchart.udt.net.NetSocketUDT;
 import com.barchart.udt.nio.SelectorProviderUDT;
+import com.barchart.udt.nio.SocketChannelUDT;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
@@ -3468,10 +3471,11 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
 	    boolean success = false;
 	    Socket sock = null;
 	    try {
-	      sock = SelectorProviderUDT.STREAM.openSocketChannel().socket();
+	    	LOG.debug("factory is " + socketFactory.getClass().getName());
+	      sock =  new NetSocketUDT();;
 	      NetUtils.connect(sock, addr,
-	        getRandomLocalInterfaceAddr(),
-	        dfsClientConf.socketTimeout);
+	    	        getRandomLocalInterfaceAddr(),
+	    	        dfsClientConf.socketTimeout);
 	      peer = UdtPeerServer.peerFromSocketAndKey(saslClient, sock, this,
 	          blockToken, datanodeId);
 	      peer.setReadTimeout(dfsClientConf.socketTimeout);

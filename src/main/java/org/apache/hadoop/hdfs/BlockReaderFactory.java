@@ -351,7 +351,6 @@ public class BlockReaderFactory implements ShortCircuitReplicaCreator {
     }
 
     if (conf.useUdt) {
-    	LOG.debug("使用udtkehduan");
     	return this.getRemoteBlockReaderFromUdt();
 
     }

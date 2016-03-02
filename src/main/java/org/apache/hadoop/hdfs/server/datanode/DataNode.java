@@ -205,6 +205,8 @@ import org.apache.hadoop.tracing.SpanReceiverInfo;
 import org.apache.hadoop.tracing.TraceAdminProtocol;
 import org.mortbay.util.ajax.JSON;
 
+import com.barchart.udt.net.NetSocketUDT;
+import com.barchart.udt.nio.SelectorProviderUDT;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
@@ -308,6 +310,7 @@ public class DataNode extends ReconfigurableBase
 
   DataNodeMetrics metrics;
   private InetSocketAddress streamingAddr;
+  private boolean useUdt;
 
   // See the note below in incrDatanodeNetworkErrors re: concurrency.
   private LoadingCache<String, Map<String, Long>> datanodeNetworkCounts;
@@ -387,6 +390,7 @@ public class DataNode extends ReconfigurableBase
     this.maxNumberOfBlocksToLog = conf.getLong(DFS_MAX_NUM_BLOCKS_TO_LOG_KEY,
         DFS_MAX_NUM_BLOCKS_TO_LOG_DEFAULT);
 
+    this.useUdt = conf.getBoolean(DFSConfigKeys.DFS_CLIENT_USE_UDT, DFSConfigKeys.DFS_CLIENT_USE_UDT_DEFAULT);
     this.usersWithLocalPathAccess = Arrays.asList(
         conf.getTrimmedStrings(DFSConfigKeys.DFS_BLOCK_LOCAL_PATH_ACCESS_USER_KEY));
     this.connectToDnViaHostname = conf.getBoolean(
@@ -898,7 +902,6 @@ public class DataNode extends ReconfigurableBase
 				peerserver = new TcpPeerServer(dnConf.socketWriteTimeout, DataNode.getStreamingAddr(conf));
 			}
 		} else {
-			LOG.info("启动udt datanode");
 			if (secureResources != null) {
 				peerserver = new UdtPeerServer(secureResources);
 			} else {
@@ -1460,10 +1463,14 @@ public class DataNode extends ReconfigurableBase
   /**
    * Creates either NIO or regular depending on socketWriteTimeout.
    */
-  protected Socket newSocket() throws IOException {
-    return (dnConf.socketWriteTimeout > 0) ?
-           SocketChannel.open().socket() : new Socket();
-  }
+	protected Socket newSocket() throws IOException {
+		if (useUdt) {
+			return (dnConf.socketWriteTimeout > 0) ? SelectorProviderUDT.STREAM.openSocketChannel().socket()
+					: new NetSocketUDT();
+		} else {
+			return (dnConf.socketWriteTimeout > 0) ? SocketChannel.open().socket() : new Socket();
+		}
+	}
 
   /**
    * Connect to the NN. This is separated out for easier testing.

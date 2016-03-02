@@ -132,6 +132,7 @@ class DataXceiverServer implements Runnable {
     Peer peer = null;
     while (datanode.shouldRun && !datanode.shutdownForUpgrade) {
       try {
+  
         peer = peerServer.accept();
 
         // Make sure the xceiver count is not exceeded
@@ -146,6 +147,7 @@ class DataXceiverServer implements Runnable {
             DataXceiver.create(peer, datanode, this))
             .start();
       } catch (SocketTimeoutException ignored) {
+    	  LOG.debug("time out", ignored);
         // wake up to see if should continue to run
       } catch (AsynchronousCloseException ace) {
         // another thread closed our listener socket - that's expected during shutdown,

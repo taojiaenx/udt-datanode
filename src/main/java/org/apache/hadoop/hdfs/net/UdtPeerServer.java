@@ -121,6 +121,8 @@ public class UdtPeerServer implements PeerServer{
 
 	  @Override
 	  public Peer accept() throws IOException, SocketTimeoutException {
+		  LOG.debug(serverSocket.getClass().getName() + ":" + serverSocket.isBound() + ":"
+				   + serverSocket.getLocalSocketAddress());
 	    Peer peer = peerFromSocket(serverSocket.accept());
 	    return peer;
 	  }
