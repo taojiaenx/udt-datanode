@@ -17,6 +17,7 @@
 package org.apache.hadoop.hdfs.server.datanode;
 
 import com.barchart.udt.net.NetServerSocketUDT;
+import com.barchart.udt.nio.SelectorProviderUDT;
 import com.barchart.udt.nio.ServerSocketChannelUDT;
 import com.google.common.annotations.VisibleForTesting;
 import org.apache.commons.daemon.Daemon;
@@ -29,6 +30,7 @@ import org.apache.hadoop.hdfs.server.common.HdfsServerConstants;
 import org.apache.hadoop.http.HttpConfig;
 import org.apache.hadoop.security.SecurityUtil;
 import org.apache.hadoop.security.UserGroupInformation;
+import org.mortbay.log.Log;
 
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
@@ -101,8 +103,10 @@ public class SecureDataNodeStarter implements Daemon {
     ServerSocket ss;
 		if (false == conf.getBoolean(DFSConfigKeys.DFS_CLIENT_USE_UDT, DFSConfigKeys.DFS_CLIENT_USE_UDT_DEFAULT)) {
 			ss = (socketWriteTimeout > 0) ? ServerSocketChannel.open().socket() : new ServerSocket();
+			Log.debug("使用tcp server" + ss.getClass().getName());
 		} else {
-			ss = (socketWriteTimeout > 0) ? ServerSocketChannelUDT.open().socket() : new NetServerSocketUDT();
+			ss = (socketWriteTimeout > 0) ? SelectorProviderUDT.STREAM.openServerSocketChannel().socket() : new NetServerSocketUDT();
+			Log.debug("使用tcp server" + ss.getClass().getName());
 		}
     ss.bind(streamingAddr, 0);
 

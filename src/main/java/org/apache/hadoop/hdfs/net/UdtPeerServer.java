@@ -21,6 +21,7 @@ import org.apache.hadoop.security.token.Token;
 
 import com.barchart.udt.net.NetServerSocketUDT;
 import com.barchart.udt.nio.NioServerSocketUDT;
+import com.barchart.udt.nio.SelectorProviderUDT;
 import com.barchart.udt.nio.ServerSocketChannelUDT;
 
 /**
@@ -40,8 +41,8 @@ public class UdtPeerServer implements PeerServer{
 	   */
 	  public UdtPeerServer(int socketWriteTimeout,
 	        InetSocketAddress bindAddr) throws IOException {
-	    this.serverSocket = socketWriteTimeout > 0 ?
-	    		ServerSocketChannelUDT.open().socket() : new NetServerSocketUDT();
+	    this.serverSocket = new NetServerSocketUDT();
+	    		LOG.debug("palin 这里构造udt" + serverSocket.getClass().getName());
 	    Server.bind(serverSocket, bindAddr, 0);
 	  }
 	/**
@@ -50,6 +51,7 @@ public class UdtPeerServer implements PeerServer{
 	   * @param secureResources   Security resources.
 	   */
 	  public UdtPeerServer(SecureResources secureResources) {
+		  LOG.debug("这里构造udt" + secureResources.getClass().getName());
 	    this.serverSocket = secureResources.getStreamingSocket();
 	  }
 	  public static Peer peerFromSocketAndKey(
@@ -97,7 +99,7 @@ public class UdtPeerServer implements PeerServer{
 		      }
 		      success = true;
 		      return peer;
-		    } finally {
+		    }finally {
 		      if (!success) {
 		        if (peer != null) peer.close();
 		        socket.close();
@@ -116,7 +118,8 @@ public class UdtPeerServer implements PeerServer{
 
 	  @Override
 	  public void setReceiveBufferSize(int size) throws IOException {
-	    this.serverSocket.setReceiveBufferSize(size);
+		//  LOG.debug("set buffer is " + size);
+	    //this.serverSocket.setReceiveBufferSize(size);
 	  }
 
 	  @Override
