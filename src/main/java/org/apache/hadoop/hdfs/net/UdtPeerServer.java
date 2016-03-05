@@ -91,7 +91,10 @@ public class UdtPeerServer implements PeerServer{
 		      // TCP_NODELAY disables nagling and thus avoids this performance
 		      // disaster.
 		     // socket.setTcpNoDelay(true);
-		      SocketChannel channel = socket.getChannel();
+		    	SocketChannel channel = null;
+		    	try {
+		       channel = socket.getChannel();
+		    	} catch(Exception ignore) {}
 		      if (channel == null) {
 		        peer = new BasicInetPeer(socket);
 		      } else {

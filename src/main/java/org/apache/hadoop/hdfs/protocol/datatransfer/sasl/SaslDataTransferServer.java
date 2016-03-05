@@ -52,6 +52,7 @@ import org.apache.hadoop.hdfs.server.datanode.DNConf;
 import org.apache.hadoop.security.SaslPropertiesResolver;
 import org.apache.hadoop.security.SecurityUtil;
 import org.apache.hadoop.security.UserGroupInformation;
+import org.mortbay.log.Log;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -175,6 +176,7 @@ public class SaslDataTransferServer {
           return encryptionKeyToPassword(getEncryptionKeyFromUserName(userName));
         }
       });
+    LOG.debug("死了没"+peer.isClosed());
     return doSaslHandshake(underlyingOut, underlyingIn, saslProps,
         callbackHandler);
   }
@@ -295,6 +297,7 @@ public class SaslDataTransferServer {
           return buildServerPassword(userName);
         }
     });
+    LOG.debug("死了没？" + peer.isClosed());
     return doSaslHandshake(underlyingOut, underlyingIn, saslProps,
         callbackHandler);
   }
@@ -354,7 +357,8 @@ public class SaslDataTransferServer {
 
     SaslParticipant sasl = SaslParticipant.createServerSaslParticipant(saslProps,
       callbackHandler);
-
+ 
+    LOG.debug("这个还连不连啊:"  + in.available());
     int magicNumber = in.readInt();
     if (magicNumber != SASL_TRANSFER_MAGIC_NUMBER) {
       throw new InvalidMagicNumberException(magicNumber, 

@@ -442,6 +442,7 @@ public class SaslDataTransferClient {
 
     out.writeInt(SASL_TRANSFER_MAGIC_NUMBER);
     out.flush();
+    LOG.debug("在这里写" +System.currentTimeMillis() + ":"+  SASL_TRANSFER_MAGIC_NUMBER);
 
     try {
       // Start of handshake - "initial response" in SASL terminology.
