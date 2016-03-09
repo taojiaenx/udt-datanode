@@ -299,6 +299,7 @@ public class RemoteBlockReader2  implements BlockReader {
     this.peer = peer;
     this.datanodeID = datanodeID;
     this.in = peer.getInputStreamChannel();
+    LOG.debug("peer is " + peer.getClass().getName());
     this.checksum = checksum;
     this.verifyChecksum = verifyChecksum;
     this.startOffset = Math.max( startOffset, 0 );

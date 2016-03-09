@@ -3472,7 +3472,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
 	    Socket sock = null;
 	    try {
 	    	LOG.debug("factory is " + socketFactory.getClass().getName());
-	      sock =  new NetSocketUDT();;
+	      sock =  SelectorProviderUDT.STREAM.openSocketChannel().socket();
 	      NetUtils.connect(sock, addr,
 	    	        getRandomLocalInterfaceAddr(),
 	    	        dfsClientConf.socketTimeout);
