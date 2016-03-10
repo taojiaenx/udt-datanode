@@ -41,7 +41,8 @@ public class UdtPeerServer implements PeerServer{
 	   */
 	  public UdtPeerServer(int socketWriteTimeout,
 	        InetSocketAddress bindAddr) throws IOException {
-	    this.serverSocket = new NetServerSocketUDT();
+	    this.serverSocket = (socketWriteTimeout > 0) ?
+	    		SelectorProviderUDT.STREAM.openServerSocketChannel().socket() :new NetServerSocketUDT();
 	    		LOG.debug("palin 这里构造udt" + serverSocket.getClass().getName());
 	    Server.bind(serverSocket, bindAddr, 0);
 	  }
