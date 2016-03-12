@@ -146,6 +146,7 @@ import org.apache.hadoop.hdfs.client.HdfsDataOutputStream;
 import org.apache.hadoop.hdfs.net.Peer;
 import org.apache.hadoop.hdfs.net.TcpPeerServer;
 import org.apache.hadoop.hdfs.net.UdtPeerServer;
+import org.apache.hadoop.hdfs.net.UdtThreadFactory;
 import org.apache.hadoop.hdfs.protocol.AclException;
 import org.apache.hadoop.hdfs.protocol.BlockStoragePolicy;
 import org.apache.hadoop.hdfs.protocol.CacheDirectiveEntry;
@@ -271,6 +272,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
   private volatile long serverDefaultsLastUpdate;
   final String clientName;
   final SocketFactory socketFactory;
+  final SocketFactory udtSocketFactory;
   final ReplaceDatanodeOnFailure dtpReplaceDatanodeOnFailure;
   final FileSystem.Statistics stats;
   private final String authority;
@@ -650,6 +652,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
     this.conf = conf;
     this.stats = stats;
     this.socketFactory = NetUtils.getSocketFactory(conf, ClientProtocol.class);
+    this.udtSocketFactory = new UdtThreadFactory();
     this.dtpReplaceDatanodeOnFailure = ReplaceDatanodeOnFailure.get(conf);
 
     this.ugi = UserGroupInformation.getCurrentUser();
@@ -805,7 +808,9 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
   int getHdfsTimeout() {
     return dfsClientConf.hdfsTimeout;
   }
-
+  public boolean useUdtClient() {
+	  return conf.getBoolean(DFS_CLIENT_USE_UDT, DFS_CLIENT_USE_UDT_DEFAULT);
+  }
   @VisibleForTesting
   public String getClientName() {
     return clientName;
@@ -3579,7 +3584,6 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
   public SaslDataTransferClient getSaslDataTransferClient() {
     return saslClient;
   }
-
   private static final byte[] PATH = "path".getBytes(Charset.forName("UTF-8"));
 
   TraceScope getPathTraceScope(String description, String path) {

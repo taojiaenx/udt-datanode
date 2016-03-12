@@ -1503,11 +1503,16 @@ public class DFSOutputStream extends FSOutputSummer
       DFSClient.LOG.debug("Connecting to datanode " + dnAddr);
     }
     final InetSocketAddress isa = NetUtils.createSocketAddr(dnAddr);
-    final Socket sock = client.socketFactory.createSocket();
+    final Socket sock;
+    if (client.useUdtClient()) {
+      sock = client.udtSocketFactory.createSocket();
+    } else {
+       sock = client.socketFactory.createSocket();
+    }
     final int timeout = client.getDatanodeReadTimeout(length);
     NetUtils.connect(sock, isa, client.getRandomLocalInterfaceAddr(), client.getConf().socketTimeout);
     sock.setSoTimeout(timeout);
-    sock.setSendBufferSize(HdfsConstants.DEFAULT_DATA_SOCKET_SIZE);
+   // sock.setSendBufferSize(HdfsConstants.DEFAULT_DATA_SOCKET_SIZE);
     if(DFSClient.LOG.isDebugEnabled()) {
       DFSClient.LOG.debug("Send buf size " + sock.getSendBufferSize());
     }
@@ -2343,6 +2348,8 @@ public class DFSOutputStream extends FSOutputSummer
   public long getFileId() {
     return fileId;
   }
+  
+
 
   private static <T> void arraycopy(T[] srcs, T[] dsts, int skipIndex) {
     System.arraycopy(srcs, 0, dsts, 0, skipIndex);
