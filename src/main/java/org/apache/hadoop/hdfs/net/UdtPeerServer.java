@@ -122,8 +122,8 @@ public class UdtPeerServer implements PeerServer{
 
 	  @Override
 	  public void setReceiveBufferSize(int size) throws IOException {
-		//  LOG.debug("set buffer is " + size);
-	    this.serverSocket.setReceiveBufferSize(size);
+		  LOG.debug("do not support set buffersize");
+	    //this.serverSocket.setReceiveBufferSize(size);
 	  }
 
 	  @Override
